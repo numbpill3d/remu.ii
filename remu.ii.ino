@@ -25,6 +25,7 @@
 #include "core/TouchInterface/TouchInterface.h"
 #include "core/AppManager/AppManager.h"
 #include "core/Settings/Settings.h"
+#include "core/FileSystem.h"
 
 // Standard libraries
 #include <WiFi.h>
@@ -220,6 +221,15 @@ void initializeSystem() {
     
     // Perform calibration
     runTouchCalibration();
+  }
+  
+  // Initialize filesystem (SD card)
+  Serial.print("[MAIN] Initializing FileSystem... ");
+  if (!filesystem.begin()) {
+    Serial.println("WARNING: FileSystem initialization failed");
+    Serial.println("[MAIN] System will continue without SD card support");
+  } else {
+    Serial.println("OK");
   }
   
   // Initialize WiFi (but don't connect yet)
@@ -433,6 +443,7 @@ void handleSerialCommands() {
     Serial.println("  apps - List registered apps");
     Serial.println("  memory - Memory usage");
     Serial.println("  touch - Touch interface status");
+    Serial.println("  filesystem - FileSystem status and operations");
     Serial.println("  calibrate - Recalibrate touch");
     Serial.println("  reset - Restart system");
     Serial.println("  launcher - Return to launcher");
@@ -457,6 +468,13 @@ void handleSerialCommands() {
   } else if (command == "touch") {
     touchInterface.printTouchInfo();
     touchInterface.printCalibrationInfo();
+    
+  } else if (command == "filesystem") {
+    Serial.println("FileSystem status:");
+    filesystem.printStats();
+    if (filesystem.isReady()) {
+      filesystem.printDirectoryTree("/", 3);
+    }
     
   } else if (command == "calibrate") {
     Serial.println("Starting touch recalibration...");
@@ -498,6 +516,12 @@ void printSystemInfo() {
   Serial.printf("Display Resolution: %dx%d\n", SCREEN_WIDTH, SCREEN_HEIGHT);
   Serial.printf("Battery Level: %d%%\n", systemCore.getBatteryPercentage());
   Serial.printf("Battery Voltage: %.2fV\n", systemCore.getBatteryVoltage());
+  Serial.printf("FileSystem Ready: %s\n", filesystem.isReady() ? "YES" : "NO");
+  if (filesystem.isReady()) {
+    Serial.printf("SD Card Space: %.1f MB free / %.1f MB total\n",
+                  filesystem.getFreeSpace() / (1024.0 * 1024.0),
+                  filesystem.getTotalSpace() / (1024.0 * 1024.0));
+  }
   
   Serial.println("===================================");
   Serial.println();
