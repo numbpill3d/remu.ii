@@ -1,4 +1,4 @@
-teres#ifndef DIGITAL_PET_H
+cs#ifndef DIGITAL_PET_H
 #define DIGITAL_PET_H
 
 #include "../../core/AppManager/BaseApp.h"

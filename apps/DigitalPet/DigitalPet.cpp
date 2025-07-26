@@ -290,19 +290,22 @@ void DigitalPetApp::onPause() {
 }
 
 void DigitalPetApp::onResume() {
-    // Update stats based on time away
+    // Update pet state based on time away
     unsigned long currentTime = millis();
     unsigned long timeAway = currentTime - pet.lastUpdate;
     
     if (timeAway > 60000) { // More than 1 minute away
-        // Apply accelerated decay
+        // Apply memory decay and corruption changes
         uint8_t minutesAway = timeAway / 60000;
-        pet.stats.hunger = max(0, (int)pet.stats.hunger - (HUNGER_DECAY_RATE * minutesAway));
-        pet.stats.loneliness = min(100, (int)pet.stats.loneliness + (LONELINESS_DECAY_RATE * minutesAway));
-        pet.stats.sleep = max(0, (int)pet.stats.sleep - (SLEEP_DECAY_RATE * minutesAway));
         
-        calculateMood();
-        calculateHappiness();
+        // Increase corruption for abandoned pets
+        if (timeAway > 600000) { // More than 10 minutes
+            pet.corruptionLevel = min(1.0f, pet.corruptionLevel + (minutesAway * 0.01f));
+            recordAction("abandon", 2.0f);
+        }
+        
+        updateMood();
+        updateArchetypeBehavior();
     }
     
     pet.lastUpdate = currentTime;
@@ -332,11 +335,11 @@ void DigitalPetApp::handleSetting(uint8_t index) {
             // Would show text input dialog
             debugLog("Rename pet selected");
             break;
-        case 1: // Customize Pet
+        case 1: // Debug Menu
             showCustomization = true;
             break;
         case 2: // Reset Pet
-            createDefaultPet();
+            createDefaultPet(pet.archetype);
             break;
         case 3: // Pet Info
             showStats = true;
@@ -629,23 +632,23 @@ void DigitalPetApp::applyEntropyInfluence() {
 }
 
 void DigitalPetApp::handleStatDecay() {
-    // Natural stat decay over time
-    pet.stats.hunger = max(0, (int)pet.stats.hunger - 1);
-    pet.stats.sleep = max(0, (int)pet.stats.sleep - 1);
-    pet.stats.loneliness = min(100, (int)pet.stats.loneliness + 1);
-    
-    // Mood decays slower
-    if (pet.stats.mood > 50) {
-        pet.stats.mood = max(50, (int)pet.stats.mood - 1);
-    }
+    // In new system, decay is handled through corruption and memory system
+    // This method is kept for compatibility but functionality moved to updateCorruption()
+    updateCorruption();
 }
 
 void DigitalPetApp::checkPetHealth() {
-    // Check if pet is still alive
-    if (pet.stats.health < 10 && pet.stats.hunger < 10 && pet.stats.sleep < 10) {
+    // Check if pet is still alive based on corruption level
+    if (pet.corruptionLevel >= 1.0f) {
         pet.isAlive = false;
-        pet.currentMood = MOOD_SICK;
-        debugLog("Pet has died!");
+        pet.mood = GLITCHED;
+        debugLog("Pet has been consumed by corruption!");
+    }
+    
+    // Check for memory-based death (complete neglect)
+    if (recentNeglect(3600000)) { // 1 hour of neglect
+        pet.isAlive = false;
+        debugLog("Pet died from neglect!");
     }
 }
 
@@ -852,8 +855,222 @@ void DigitalPetApp::observePet() {
 }
 
 // ========================================
+// MISSING METHOD IMPLEMENTATIONS
+// ========================================
+
+void DigitalPetApp::playWithPet() {
+    if (!pet.isAlive) return;
+    
+    recordAction("play", 1.2f);
+    pet.totalInteractions++;
+    
+    // Get archetype-specific response
+    String response = getArchetypeResponse("play");
+    debugLog("Pet response: " + response);
+    
+    // Show happy animation
+    setAnimation(happyAnimation, 3, false);
+}
+
+void DigitalPetApp::putPetToSleep() {
+    if (!pet.isAlive) return;
+    
+    recordAction("sleep", 0.8f);
+    pet.totalInteractions++;
+    pet.isAwake = false;
+    
+    debugLog("Pet is now sleeping");
+}
+
+void DigitalPetApp::petPet() {
+    // Alias for interactWithPet for compatibility
+    interactWithPet();
+}
+
+void DigitalPetApp::createDefaultPet(PetArchetype archetype) {
+    // Initialize new psychological model
+    pet.mood = CALM;
+    pet.traits.clear();
+    pet.corruptionLevel = 0.0f;
+    pet.isAwake = true;
+    pet.isObservingUser = false;
+    pet.memory.clear();
+    pet.personalitySeed = random(0xFFFFFFFF);
+    pet.archetype = archetype;
+    pet.birthTime = millis();
+    pet.lastUpdate = millis();
+    pet.totalInteractions = 0;
+    pet.isAlive = true;
+    
+    // Initialize archetype-specific data
+    initializeArchetype(archetype);
+    
+    debugLog("Created default pet: " + pet.name);
+}
+
+// ========================================
 // RENDERING METHODS
 // ========================================
+
+void DigitalPetApp::drawArchetypeSpecificElements(int16_t x, int16_t y) {
+    switch (pet.archetype) {
+        case ORACLE:
+            // Draw entropy reading symbols around Oracle
+            if (getCurrentEntropy() > 0.7f) {
+                displayManager.setFont(FONT_SMALL);
+                displayManager.drawText(x - 20, y, "※", COLOR_PURPLE_GLOW);
+                displayManager.drawText(x + 35, y, "※", COLOR_PURPLE_GLOW);
+                displayManager.drawText(x + 8, y - 20, "◊", COLOR_BLUE_CYBER);
+            }
+            break;
+            
+        case PARASITE:
+            // Draw battery drain indicator
+            if (std::find(pet.traits.begin(), pet.traits.end(), NEEDY) != pet.traits.end()) {
+                displayManager.drawText(x + 20, y - 10, "⚡", COLOR_RED_GLOW);
+            }
+            // Draw clinging tendrils when highly corrupted
+            if (isHighlyCorrupted()) {
+                displayManager.drawRetroLine(x, y + 16, x - 10, y + 25, COLOR_RED_GLOW);
+                displayManager.drawRetroLine(x + 16, y + 16, x + 26, y + 25, COLOR_RED_GLOW);
+            }
+            break;
+            
+        case MIRROR:
+            // Draw reflection/echo effects
+            if (pet.mood == RESTLESS) {
+                // Draw shadow/mirror image slightly offset
+                displayManager.drawIcon(x + 2, y + 2, PET_SPRITE_IDLE, COLOR_DARK_GRAY);
+            }
+            // Draw paranoid surveillance symbols
+            if (std::find(pet.traits.begin(), pet.traits.end(), PARANOID) != pet.traits.end()) {
+                displayManager.drawText(x - 15, y - 15, "👁", COLOR_BLUE_CYBER);
+            }
+            break;
+    }
+}
+
+String DigitalPetApp::corrupted_text(String original) {
+    String corrupted = original;
+    int corruptChars = pet.corruptionLevel * original.length();
+    
+    for (int i = 0; i < corruptChars && i < original.length(); i++) {
+        int pos = random(original.length());
+        char glitchChars[] = {'#', '@', '$', '%', '!', '?', '*'};
+        corrupted.setCharAt(pos, glitchChars[random(7)]);
+    }
+    
+    return corrupted;
+}
+
+bool DigitalPetApp::isCorrupted() {
+    return pet.corruptionLevel > CORRUPTION_THRESHOLD_LOW;
+}
+
+bool DigitalPetApp::isHighlyCorrupted() {
+    return pet.corruptionLevel > CORRUPTION_THRESHOLD_HIGH;
+}
+
+void DigitalPetApp::drawCorruptionOverlay() {
+    if (!isCorrupted()) return;
+    
+    // Draw corruption static using small rectangles
+    int staticIntensity = pet.corruptionLevel * 10;
+    for (int i = 0; i < staticIntensity; i++) {
+        int x = random(SCREEN_WIDTH - 2);
+        int y = random(SCREEN_HEIGHT - 2);
+        displayManager.drawRetroRect(x, y, 2, 2, COLOR_RED_GLOW, true);
+    }
+    
+    // Draw corruption lines
+    for (int i = 0; i < pet.corruptionLevel * 3; i++) {
+        int y = random(SCREEN_HEIGHT);
+        displayManager.drawRetroLine(0, y, SCREEN_WIDTH, y, COLOR_RED_GLOW);
+    }
+}
+
+void DigitalPetApp::drawGlitchEffects() {
+    if (!isHighlyCorrupted()) return;
+    
+    // Screen tear effects
+    if (random(100) < 10) {
+        int tearY = random(SCREEN_HEIGHT - 20);
+        for (int i = 0; i < 5; i++) {
+            displayManager.drawRetroLine(0, tearY + i, SCREEN_WIDTH, tearY + i, COLOR_PURPLE_GLOW);
+        }
+    }
+    
+    // Color channel shifts
+    if (random(100) < 5) {
+        // Draw shifted colored rectangles
+        displayManager.drawRetroRect(random(SCREEN_WIDTH-20), random(SCREEN_HEIGHT-20),
+                                   20, 20, COLOR_RED_GLOW, false);
+        displayManager.drawRetroRect(random(SCREEN_WIDTH-20), random(SCREEN_HEIGHT-20),
+                                   20, 20, COLOR_GREEN_PHOS, false);
+    }
+}
+
+void DigitalPetApp::drawReactiveRoom() {
+    // Draw room background that changes based on pet treatment history
+    updateRoomTheme();
+    
+    // Draw floor
+    displayManager.drawRetroLine(20, 150, SCREEN_WIDTH - 20, 150, COLOR_MID_GRAY);
+    
+    // Draw theme-specific decorations
+    switch (currentRoomTheme) {
+        case THEME_LOVING:
+            // Warm, welcoming room
+            displayManager.drawText(30, 135, "♥", COLOR_GREEN_PHOS);
+            displayManager.drawText(250, 135, "♥", COLOR_GREEN_PHOS);
+            displayManager.drawRetroRect(40, 140, 20, 8, COLOR_GREEN_PHOS, true); // Food bowl
+            break;
+            
+        case THEME_GLITCHED:
+            // Cold, empty room
+            displayManager.drawText(50, 135, "...", COLOR_DARK_GRAY);
+            displayManager.drawRetroRect(250, 140, 16, 8, COLOR_DARK_GRAY, true); // Empty bowl
+            break;
+            
+        case THEME_NEEDY:
+            // Aggressive, spiky decorations
+            displayManager.drawText(30, 130, "⚡", COLOR_RED_GLOW);
+            displayManager.drawText(260, 130, "⚡", COLOR_RED_GLOW);
+            // Draw warning signs
+            displayManager.drawText(150, 135, "!!", COLOR_RED_GLOW);
+            break;
+            
+        case THEME_PARANOID:
+            // Glitched, unstable room
+            if (random(100) < 20) {
+                displayManager.drawText(random(SCREEN_WIDTH-20), 135, "#", COLOR_PURPLE_GLOW);
+                displayManager.drawText(random(SCREEN_WIDTH-20), 140, "@", COLOR_RED_GLOW);
+            }
+            // Flickering walls
+            if (frameCount % 10 < 3) {
+                displayManager.drawRetroLine(10, 50, 10, 150, COLOR_PURPLE_GLOW);
+                displayManager.drawRetroLine(SCREEN_WIDTH-10, 50, SCREEN_WIDTH-10, 150, COLOR_RED_GLOW);
+            }
+            break;
+    }
+}
+
+void DigitalPetApp::updateRoomTheme() {
+    // Determine room theme based on recent treatment
+    float loveInfluence = getMemoryInfluence("pet", 600000) + getMemoryInfluence("feed", 600000);
+    float punishInfluence = getMemoryInfluence("punish", 600000);
+    bool hasNeglect = recentNeglect(600000);
+    
+    if (isHighlyCorrupted()) {
+        currentRoomTheme = THEME_PARANOID;
+    } else if (punishInfluence > 1.0f) {
+        currentRoomTheme = THEME_NEEDY;
+    } else if (hasNeglect || loveInfluence < 0.5f) {
+        currentRoomTheme = THEME_GLITCHED;
+    } else {
+        currentRoomTheme = THEME_LOVING;
+    }
+}
 
 void DigitalPetApp::drawPet() {
     // Draw pet sprite in center
@@ -862,14 +1079,19 @@ void DigitalPetApp::drawPet() {
     
     drawAnimatedSprite(petX, petY);
     
-    // Draw accessories
-    if (pet.custom.accessories & ACCESSORY_HAT) {
-        displayManager.drawIcon(petX, petY - 8, ACCESSORY_HAT_SPRITE, COLOR_RED_GLOW);
-    }
+    // Draw archetype-specific visual elements
+    drawArchetypeSpecificElements(petX, petY);
     
-    // Draw pet name
+    // Draw pet name with archetype indicator
     displayManager.setFont(FONT_MEDIUM);
-    displayManager.drawTextCentered(0, 40, SCREEN_WIDTH, pet.custom.name, COLOR_GREEN_PHOS);
+    String displayName = pet.name;
+    if (isCorrupted()) {
+        // Occasionally corrupt the name display
+        if (random(100) < pet.corruptionLevel * 50) {
+            displayName = corrupted_text(displayName);
+        }
+    }
+    displayManager.drawTextCentered(0, 40, SCREEN_WIDTH, displayName, COLOR_GREEN_PHOS);
 }
 
 void DigitalPetApp::drawAnimatedSprite(int16_t x, int16_t y) {
@@ -882,15 +1104,22 @@ void DigitalPetApp::drawAnimatedSprite(int16_t x, int16_t y) {
     // Draw current animation frame
     const uint8_t* spriteData = currentAnimation[currentAnimFrame].spriteData;
     
-    // Color based on mood
+    // Color based on mood (updated for new system)
     uint16_t spriteColor = COLOR_WHITE;
-    switch (pet.currentMood) {
-        case MOOD_HAPPY: spriteColor = COLOR_GREEN_PHOS; break;
-        case MOOD_SAD: spriteColor = COLOR_BLUE_CYBER; break;
-        case MOOD_ANGRY: spriteColor = COLOR_RED_GLOW; break;
-        case MOOD_SICK: spriteColor = COLOR_LIGHT_GRAY; break;
-        case MOOD_CHAOTIC: spriteColor = COLOR_PURPLE_GLOW; break;
+    switch (pet.mood) {
+        case CALM: spriteColor = COLOR_GREEN_PHOS; break;
+        case RESTLESS: spriteColor = COLOR_GREEN_PHOS; break;
+        case OBSESSED: spriteColor = COLOR_RED_GLOW; break;
+        case GLITCHED: spriteColor = COLOR_PURPLE_GLOW; break;
         default: spriteColor = COLOR_WHITE; break;
+    }
+    
+    // Apply corruption effects to color (simplified without blendColors)
+    if (isCorrupted()) {
+        // Alternate between original color and corruption color based on corruption level
+        if (random(100) < pet.corruptionLevel * 50) {
+            spriteColor = COLOR_RED_GLOW;
+        }
     }
     
     displayManager.drawIcon(x, y, spriteData, spriteColor);
@@ -901,21 +1130,34 @@ void DigitalPetApp::drawMoodIndicator() {
     displayManager.setFont(FONT_SMALL);
     String moodText = "Mood: ";
     
-    switch (pet.currentMood) {
-        case MOOD_HAPPY: moodText += "Happy"; break;
-        case MOOD_CONTENT: moodText += "Content"; break;
-        case MOOD_NEUTRAL: moodText += "Neutral"; break;
-        case MOOD_SAD: moodText += "Sad"; break;
-        case MOOD_ANGRY: moodText += "Angry"; break;
-        case MOOD_SLEEPING: moodText += "Sleeping"; break;
-        case MOOD_SICK: moodText += "Sick"; break;
-        case MOOD_CHAOTIC: moodText += "Chaotic"; break;
+    switch (pet.mood) {
+        case CALM: moodText += "Calm"; break;
+        case RESTLESS: moodText += "Restless"; break;
+        case OBSESSED: moodText += "Obsessed"; break;
+        case GLITCHED: moodText += "Glitched"; break;
+    }
+    
+    // Add corruption indicator
+    if (isCorrupted()) {
+        moodText += " [CORRUPT:" + String(int(pet.corruptionLevel * 100)) + "%]";
     }
     
     displayManager.drawText(10, 220, moodText, COLOR_GREEN_PHOS);
     
-    // Draw simple ASCII mood indicator
-    drawASCIIMood(280, 220, pet.currentMood);
+    // Draw traits
+    if (!pet.traits.empty()) {
+        String traitsText = "Traits: ";
+        for (size_t i = 0; i < pet.traits.size(); i++) {
+            switch (pet.traits[i]) {
+                case LOVING: traitsText += "♥"; break;
+                case AGGRESSIVE: traitsText += "⚡"; break;
+                case NEEDY: traitsText += "◎"; break;
+                case PARANOID: traitsText += "※"; break;
+            }
+            if (i < pet.traits.size() - 1) traitsText += " ";
+        }
+        displayManager.drawText(10, 205, traitsText, COLOR_BLUE_CYBER);
+    }
 }
 
 void DigitalPetApp::drawStatsDisplay() {
@@ -925,42 +1167,71 @@ void DigitalPetApp::drawStatsDisplay() {
     displayManager.setFont(FONT_MEDIUM);
     displayManager.drawTextCentered(0, 10, SCREEN_WIDTH, "Pet Stats", COLOR_RED_GLOW);
     
-    // Stats bars
-    int16_t barY = 50;
-    int16_t barHeight = 12;
-    int16_t barSpacing = 20;
-    
     displayManager.setFont(FONT_SMALL);
+    int16_t yPos = 50;
+    int16_t lineSpacing = 18;
     
-    // Hunger
-    displayManager.drawText(10, barY, "Hunger:", COLOR_WHITE);
-    displayManager.drawProgressBar(80, barY, 180, barHeight, pet.stats.hunger, COLOR_GREEN_PHOS);
-    barY += barSpacing;
+    // Pet identity
+    displayManager.drawText(10, yPos, "Name: " + pet.name, COLOR_GREEN_PHOS);
+    yPos += lineSpacing;
     
-    // Loneliness (inverted display)
-    displayManager.drawText(10, barY, "Lonely:", COLOR_WHITE);
-    displayManager.drawProgressBar(80, barY, 180, barHeight, 100 - pet.stats.loneliness, COLOR_BLUE_CYBER);
-    barY += barSpacing;
+    // Archetype
+    String archetypeStr = "Archetype: ";
+    switch (pet.archetype) {
+        case ORACLE: archetypeStr += "Oracle"; break;
+        case PARASITE: archetypeStr += "Parasite"; break;
+        case MIRROR: archetypeStr += "Mirror"; break;
+    }
+    displayManager.drawText(10, yPos, archetypeStr, COLOR_PURPLE_GLOW);
+    yPos += lineSpacing;
     
-    // Sleep
-    displayManager.drawText(10, barY, "Sleep:", COLOR_WHITE);
-    displayManager.drawProgressBar(80, barY, 180, barHeight, pet.stats.sleep, COLOR_PURPLE_GLOW);
-    barY += barSpacing;
+    // Current mood
+    String moodStr = "Mood: ";
+    switch (pet.mood) {
+        case CALM: moodStr += "Calm"; break;
+        case RESTLESS: moodStr += "Restless"; break;
+        case OBSESSED: moodStr += "Obsessed"; break;
+        case GLITCHED: moodStr += "Glitched"; break;
+    }
+    displayManager.drawText(10, yPos, moodStr, COLOR_BLUE_CYBER);
+    yPos += lineSpacing;
     
-    // Happiness
-    displayManager.drawText(10, barY, "Happy:", COLOR_WHITE);
-    displayManager.drawProgressBar(80, barY, 180, barHeight, pet.stats.happiness, COLOR_RED_GLOW);
-    barY += barSpacing;
+    // Corruption level
+    displayManager.drawText(10, yPos, "Corruption:", COLOR_WHITE);
+    int corruptionPercent = pet.corruptionLevel * 100;
+    displayManager.drawProgressBar(100, yPos, 150, 10, corruptionPercent,
+                                  corruptionPercent > 70 ? COLOR_RED_GLOW : COLOR_YELLOW);
+    yPos += lineSpacing;
     
-    // Health
-    displayManager.drawText(10, barY, "Health:", COLOR_WHITE);
-    displayManager.drawProgressBar(80, barY, 180, barHeight, pet.stats.health, 
-                                  pet.stats.health > 50 ? COLOR_GREEN_PHOS : COLOR_RED_GLOW);
-    barY += barSpacing;
+    // Active traits
+    String traitsStr = "Traits: ";
+    for (size_t i = 0; i < pet.traits.size(); i++) {
+        switch (pet.traits[i]) {
+            case LOVING: traitsStr += "♥"; break;
+            case AGGRESSIVE: traitsStr += "⚡"; break;
+            case NEEDY: traitsStr += "◎"; break;
+            case PARANOID: traitsStr += "※"; break;
+        }
+        if (i < pet.traits.size() - 1) traitsStr += " ";
+    }
+    displayManager.drawText(10, yPos, traitsStr, COLOR_BLUE_CYBER);
+    yPos += lineSpacing;
+    
+    // Memory entries
+    displayManager.drawText(10, yPos, "Memories: " + String(pet.memory.size()), COLOR_LIGHT_GRAY);
+    yPos += lineSpacing;
     
     // Pet info
-    displayManager.drawText(10, barY + 10, "Age: " + String(getPetAge()) + " hours", COLOR_LIGHT_GRAY);
-    displayManager.drawText(10, barY + 25, "Interactions: " + String(pet.totalInteractions), COLOR_LIGHT_GRAY);
+    displayManager.drawText(10, yPos, "Age: " + String(getPetAge()) + " hours", COLOR_LIGHT_GRAY);
+    yPos += lineSpacing;
+    displayManager.drawText(10, yPos, "Interactions: " + String(pet.totalInteractions), COLOR_LIGHT_GRAY);
+    yPos += lineSpacing;
+    
+    // Status
+    String statusStr = "Status: ";
+    statusStr += pet.isAlive ? "Alive" : "Dead";
+    statusStr += pet.isAwake ? " (Awake)" : " (Sleeping)";
+    displayManager.drawText(10, yPos, statusStr, pet.isAlive ? COLOR_GREEN_PHOS : COLOR_RED_GLOW);
     
     // Close instruction
     displayManager.drawTextCentered(0, 210, SCREEN_WIDTH, "Touch to close", COLOR_LIGHT_GRAY);
@@ -994,23 +1265,8 @@ void DigitalPetApp::drawBackground() {
 }
 
 void DigitalPetApp::drawPetRoom() {
-    // Draw simple room elements
-    displayManager.setFont(FONT_SMALL);
-    
-    // Floor line
-    displayManager.drawLine(20, 150, SCREEN_WIDTH - 20, 150, COLOR_MID_GRAY);
-    
-    // Food bowl (if hungry)
-    if (pet.stats.hunger < 50) {
-        displayManager.drawRetroRect(250, 140, 16, 8, COLOR_MID_GRAY, true);
-        displayManager.drawText(250, 130, "FOOD", COLOR_LIGHT_GRAY);
-    }
-    
-    // Bed (if tired)
-    if (pet.stats.sleep < 50) {
-        displayManager.drawRetroRect(30, 135, 30, 12, COLOR_PURPLE_GLOW, true);
-        displayManager.drawText(30, 125, "BED", COLOR_LIGHT_GRAY);
-    }
+    // Legacy method - functionality moved to drawReactiveRoom()
+    drawReactiveRoom();
 }
 
 void DigitalPetApp::drawASCIIMood(int16_t x, int16_t y, PetMood mood) {
@@ -1019,35 +1275,19 @@ void DigitalPetApp::drawASCIIMood(int16_t x, int16_t y, PetMood mood) {
     String symbol = ":)";
     
     switch (mood) {
-        case MOOD_HAPPY:
-            symbol = ":D";
-            color = COLOR_GREEN_PHOS;
-            break;
-        case MOOD_CONTENT:
+        case CALM:
             symbol = ":)";
             color = COLOR_GREEN_PHOS;
             break;
-        case MOOD_NEUTRAL:
-            symbol = ":|";
-            color = COLOR_WHITE;
+        case RESTLESS:
+            symbol = ":/";
+            color = COLOR_YELLOW;
             break;
-        case MOOD_SAD:
-            symbol = ":(";
-            color = COLOR_BLUE_CYBER;
-            break;
-        case MOOD_ANGRY:
-            symbol = ">:(";
+        case OBSESSED:
+            symbol = "O_O";
             color = COLOR_RED_GLOW;
             break;
-        case MOOD_SLEEPING:
-            symbol = "zzZ";
-            color = COLOR_PURPLE_GLOW;
-            break;
-        case MOOD_SICK:
-            symbol = "X_X";
-            color = COLOR_LIGHT_GRAY;
-            break;
-        case MOOD_CHAOTIC:
+        case GLITCHED:
             symbol = "@_@";
             color = COLOR_PURPLE_GLOW;
             break;
@@ -1112,6 +1352,36 @@ void DigitalPetApp::handleZoneTouch(int8_t zone) {
 }
 
 // ========================================
+// MISSING BASEAPP METHOD IMPLEMENTATIONS
+// ========================================
+
+bool DigitalPetApp::handleMessage(AppMessage message, void* data) {
+    // Handle inter-app messages
+    switch (message.type) {
+        case MSG_ENTROPY_UPDATE:
+            // Could receive entropy data from other apps
+            if (data) {
+                float* entropyValue = (float*)data;
+                // Use external entropy data to influence pet
+                if (*entropyValue > 0.8f) {
+                    pet.corruptionLevel = min(1.0f, pet.corruptionLevel + 0.005f);
+                }
+            }
+            return true;
+            
+        case MSG_BATTERY_LOW:
+            // Parasite archetype reacts to low battery
+            if (pet.archetype == PARASITE) {
+                recordAction("battery_drain", 2.0f);
+            }
+            return true;
+            
+        default:
+            return false;
+    }
+}
+
+// ========================================
 // ANIMATION SYSTEM
 // ========================================
 
@@ -1162,7 +1432,7 @@ bool DigitalPetApp::loadPetData() {
     }
     
     // Read JSON data
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(2048); // Increased size for new data structures
     DeserializationError error = deserializeJson(doc, file);
     file.close();
     
@@ -1177,30 +1447,40 @@ bool DigitalPetApp::loadPetData() {
         return false;
     }
     
-    // Load pet stats
-    pet.stats.mood = doc["stats"]["mood"];
-    pet.stats.hunger = doc["stats"]["hunger"];
-    pet.stats.loneliness = doc["stats"]["loneliness"];
-    pet.stats.entropy = doc["stats"]["entropy"];
-    pet.stats.sleep = doc["stats"]["sleep"];
-    pet.stats.stability = doc["stats"]["stability"];
-    pet.stats.happiness = doc["stats"]["happiness"];
-    pet.stats.health = doc["stats"]["health"];
+    // Load new psychological state
+    pet.mood = (PetMood)doc["mood"].as<int>();
+    pet.corruptionLevel = doc["corruptionLevel"];
+    pet.isAwake = doc["isAwake"];
+    pet.isObservingUser = doc["isObservingUser"];
+    pet.personalitySeed = doc["personalitySeed"];
     
-    // Load customization
-    pet.custom.name = doc["custom"]["name"].as<String>();
-    pet.custom.accessories = doc["custom"]["accessories"];
-    pet.custom.colorScheme = doc["custom"]["colorScheme"];
-    pet.custom.skinType = doc["custom"]["skinType"];
+    // Load traits
+    pet.traits.clear();
+    JsonArray traitsArray = doc["traits"];
+    for (JsonVariant trait : traitsArray) {
+        pet.traits.push_back((PetTrait)trait.as<int>());
+    }
     
-    // Load state
-    pet.birthTime = doc["state"]["birthTime"];
-    pet.totalInteractions = doc["state"]["totalInteractions"];
-    pet.evolutionStage = doc["state"]["evolutionStage"];
-    pet.isAlive = doc["state"]["isAlive"];
+    // Load archetype and identity
+    pet.archetype = (PetArchetype)doc["archetype"].as<int>();
+    pet.name = doc["name"].as<String>();
+    pet.birthTime = doc["birthTime"];
     pet.lastUpdate = millis();
+    pet.totalInteractions = doc["totalInteractions"];
+    pet.isAlive = doc["isAlive"];
     
-    debugLog("Pet data loaded successfully");
+    // Load memory (simplified - just timestamp and action type)
+    pet.memory.clear();
+    JsonArray memoryArray = doc["memory"];
+    for (JsonVariant mem : memoryArray) {
+        PetMemory memory;
+        memory.action = mem["action"].as<String>();
+        memory.timestamp = mem["timestamp"];
+        memory.intensity = mem["intensity"];
+        pet.memory.push_back(memory);
+    }
+    
+    debugLog("Pet data loaded successfully: " + pet.name);
     return true;
 }
 
@@ -1215,65 +1495,59 @@ bool DigitalPetApp::savePetData() {
     }
     
     // Create JSON document
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(2048); // Increased size for new data structures
     
-    // Save pet stats
-    doc["stats"]["mood"] = pet.stats.mood;
-    doc["stats"]["hunger"] = pet.stats.hunger;
-    doc["stats"]["loneliness"] = pet.stats.loneliness;
-    doc["stats"]["entropy"] = pet.stats.entropy;
-    doc["stats"]["sleep"] = pet.stats.sleep;
-    doc["stats"]["stability"] = pet.stats.stability;
-    doc["stats"]["happiness"] = pet.stats.happiness;
-    doc["stats"]["health"] = pet.stats.health;
+    // Save new psychological state
+    doc["mood"] = (int)pet.mood;
+    doc["corruptionLevel"] = pet.corruptionLevel;
+    doc["isAwake"] = pet.isAwake;
+    doc["isObservingUser"] = pet.isObservingUser;
+    doc["personalitySeed"] = pet.personalitySeed;
     
-    // Save customization
-    doc["custom"]["name"] = pet.custom.name;
-    doc["custom"]["accessories"] = pet.custom.accessories;
-    doc["custom"]["colorScheme"] = pet.custom.colorScheme;
-    doc["custom"]["skinType"] = pet.custom.skinType;
+    // Save traits
+    JsonArray traitsArray = doc.createNestedArray("traits");
+    for (PetTrait trait : pet.traits) {
+        traitsArray.add((int)trait);
+    }
     
-    // Save state
-    doc["state"]["birthTime"] = pet.birthTime;
-    doc["state"]["totalInteractions"] = pet.totalInteractions;
-    doc["state"]["evolutionStage"] = pet.evolutionStage;
-    doc["state"]["isAlive"] = pet.isAlive;
-    doc["state"]["lastSave"] = millis();
+    // Save archetype and identity
+    doc["archetype"] = (int)pet.archetype;
+    doc["name"] = pet.name;
+    doc["birthTime"] = pet.birthTime;
+    doc["totalInteractions"] = pet.totalInteractions;
+    doc["isAlive"] = pet.isAlive;
+    
+    // Save memory (limited to recent entries to save space)
+    JsonArray memoryArray = doc.createNestedArray("memory");
+    int memoryCount = 0;
+    for (auto it = pet.memory.rbegin(); it != pet.memory.rend() && memoryCount < 20; ++it, ++memoryCount) {
+        JsonObject memObj = memoryArray.createNestedObject();
+        memObj["action"] = it->action;
+        memObj["timestamp"] = it->timestamp;
+        memObj["intensity"] = it->intensity;
+    }
     
     // Add metadata
-    doc["version"] = "1.0";
+    doc["version"] = "2.0";
     doc["saveTime"] = systemCore.getUptimeSeconds();
     
     // Write to file
     serializeJson(doc, file);
     file.close();
     
-    debugLog("Pet data saved successfully");
+    debugLog("Pet data saved successfully: " + pet.name);
     return true;
 }
 
-void DigitalPetApp::createDefaultPet() {
-    // Initialize with default values
-    pet.stats = {50, 75, 20, 0, 80, 75, 60, 70}; // mood, hunger, loneliness, entropy, sleep, stability, happiness, health
-    pet.custom = {ACCESSORY_NONE, 0, "Cyber", 0};
-    pet.currentMood = MOOD_CONTENT;
-    pet.currentActivity = ACTIVITY_IDLE;
-    pet.birthTime = millis();
-    pet.lastUpdate = millis();
-    pet.totalInteractions = 0;
-    pet.evolutionStage = 0;
-    pet.isAlive = true;
-    
-    debugLog("Created default pet: " + pet.custom.name);
-}
+// This method was already replaced above with the proper archetype version
 
 bool DigitalPetApp::validateSaveData(JsonDocument& doc) {
-    // Basic validation of save file structure
-    return doc.containsKey("stats") && 
-           doc.containsKey("custom") && 
-           doc.containsKey("state") &&
-           doc["stats"].containsKey("mood") &&
-           doc["custom"].containsKey("name");
+    // Basic validation of new save file structure
+    return doc.containsKey("mood") &&
+           doc.containsKey("archetype") &&
+           doc.containsKey("name") &&
+           doc.containsKey("corruptionLevel") &&
+           doc.containsKey("birthTime");
 }
 
 // ========================================
@@ -1286,7 +1560,7 @@ unsigned long DigitalPetApp::getPetAge() const {
 
 void DigitalPetApp::setPetName(String name) {
     if (name.length() > 0 && name.length() <= 12) {
-        pet.custom.name = name;
+        pet.name = name;
         savePetData();
     }
 }
@@ -1294,13 +1568,153 @@ void DigitalPetApp::setPetName(String name) {
 void DigitalPetApp::drawCustomizationMenu() {
     displayManager.clearScreen(COLOR_BLACK);
     displayManager.setFont(FONT_MEDIUM);
-    displayManager.drawTextCentered(0, 20, SCREEN_WIDTH, "Customize Pet", COLOR_RED_GLOW);
+    displayManager.drawTextCentered(0, 20, SCREEN_WIDTH, "Pet Debug Menu", COLOR_RED_GLOW);
     
     displayManager.setFont(FONT_SMALL);
-    displayManager.drawTextCentered(0, 200, SCREEN_WIDTH, "Touch to close", COLOR_LIGHT_GRAY);
     
-    // Simple customization options would go here
-    displayManager.drawText(20, 60, "Accessories:", COLOR_WHITE);
-    displayManager.drawText(30, 80, "[ ] Hat", pet.custom.accessories & ACCESSORY_HAT ? COLOR_GREEN_PHOS : COLOR_LIGHT_GRAY);
-    displayManager.drawText(30, 100, "[ ] Glasses", pet.custom.accessories & ACCESSORY_GLASSES ? COLOR_GREEN_PHOS : COLOR_LIGHT_GRAY);
+    // Show current corruption level
+    displayManager.drawText(20, 60, "Corruption: " + String(int(pet.corruptionLevel * 100)) + "%", COLOR_WHITE);
+    
+    // Show entropy reading
+    displayManager.drawText(20, 80, "Entropy: " + String(int(getCurrentEntropy() * 100)) + "%", COLOR_WHITE);
+    
+    // Show memory count
+    displayManager.drawText(20, 100, "Memories: " + String(pet.memory.size()), COLOR_WHITE);
+    
+    // Show recent actions
+    displayManager.drawText(20, 120, "Recent Actions:", COLOR_WHITE);
+    int y = 140;
+    int count = 0;
+    for (auto it = pet.memory.rbegin(); it != pet.memory.rend() && count < 3; ++it, ++count) {
+        displayManager.drawText(30, y, it->action, COLOR_LIGHT_GRAY);
+        y += 15;
+    }
+    
+    displayManager.drawTextCentered(0, 200, SCREEN_WIDTH, "Touch to close", COLOR_LIGHT_GRAY);
+}
+
+// ========================================
+// CORRUPTION-BASED EVOLUTION SYSTEM
+// ========================================
+
+void DigitalPetApp::processCorruptionEvolution() {
+    // Handle corruption-based mutations and evolution
+    if (pet.corruptionLevel > 0.8f && random(1000) < 5) { // 0.5% chance per update
+        triggerCorruptionMutation();
+    }
+    
+    // Handle memory-based trait evolution
+    if (pet.memory.size() > 30 && random(1000) < 2) { // 0.2% chance with sufficient memory
+        evolvePersonalityTrait();
+    }
+}
+
+void DigitalPetApp::triggerCorruptionMutation() {
+    // Add aggressive trait from high corruption
+    if (pet.corruptionLevel > 0.9f) {
+        if (std::find(pet.traits.begin(), pet.traits.end(), AGGRESSIVE) == pet.traits.end()) {
+            pet.traits.push_back(AGGRESSIVE);
+            recordAction("corruption_mutation", 3.0f);
+            debugLog("Pet mutated: gained AGGRESSIVE trait from corruption");
+        }
+    }
+    
+    // Paranoid evolution from prolonged high corruption
+    if (pet.corruptionLevel > 0.7f) {
+        if (std::find(pet.traits.begin(), pet.traits.end(), PARANOID) == pet.traits.end()) {
+            pet.traits.push_back(PARANOID);
+            recordAction("paranoia_evolution", 2.5f);
+            debugLog("Pet evolved: gained PARANOID trait");
+        }
+    }
+}
+
+void DigitalPetApp::evolvePersonalityTrait() {
+    // Analyze memory patterns to evolve personality
+    float loveRatio = getMemoryInfluence("pet", 1800000) + getMemoryInfluence("feed", 1800000); // 30 min window
+    float neglectRatio = getMemoryInfluence("neglect", 1800000);
+    float punishRatio = getMemoryInfluence("punish", 1800000);
+    
+    if (loveRatio > 3.0f && neglectRatio < 0.5f) {
+        // Evolve to LOVING if consistently well-treated
+        if (std::find(pet.traits.begin(), pet.traits.end(), LOVING) == pet.traits.end()) {
+            pet.traits.push_back(LOVING);
+            debugLog("Pet evolved: gained LOVING trait from good treatment");
+        }
+    } else if (neglectRatio > 2.0f) {
+        // Evolve to NEEDY if consistently neglected
+        if (std::find(pet.traits.begin(), pet.traits.end(), NEEDY) == pet.traits.end()) {
+            pet.traits.push_back(NEEDY);
+            debugLog("Pet evolved: gained NEEDY trait from neglect");
+        }
+    }
+}
+
+// ========================================
+// PUBLIC API METHODS FOR EXTERNAL MANIPULATION
+// ========================================
+
+void DigitalPetApp::increaseCorruption(float amount) {
+    pet.corruptionLevel = min(1.0f, pet.corruptionLevel + amount);
+    recordAction("external_corruption", amount);
+}
+
+void DigitalPetApp::decreaseCorruption(float amount) {
+    pet.corruptionLevel = max(0.0f, pet.corruptionLevel - amount);
+    recordAction("external_healing", amount);
+}
+
+bool DigitalPetApp::hasRecentMemory(String actionType, unsigned long timeWindowMs) {
+    return getMemoryInfluence(actionType, timeWindowMs) > 0.0f;
+}
+
+float DigitalPetApp::getMemoryInfluenceForAction(String actionType) {
+    return getMemoryInfluence(actionType, 600000); // 10 minute default window
+}
+
+void DigitalPetApp::debugPrintMemory() {
+    debugLog("=== PET MEMORY DEBUG ===");
+    debugLog("Total memories: " + String(pet.memory.size()));
+    debugLog("Corruption level: " + String(pet.corruptionLevel));
+    debugLog("Current mood: " + String(pet.mood));
+    
+    int count = 0;
+    for (auto it = pet.memory.rbegin(); it != pet.memory.rend() && count < 10; ++it, ++count) {
+        debugLog("Memory " + String(count) + ": " + it->action + " (intensity: " + String(it->intensity) + ")");
+    }
+    debugLog("=== END MEMORY DEBUG ===");
+}
+
+void DigitalPetApp::debugResetPet() {
+    createDefaultPet(pet.archetype);
+    debugLog("Pet has been reset to default state");
+}
+
+void DigitalPetApp::debugSetCorruption(float level) {
+    pet.corruptionLevel = constrain(level, 0.0f, 1.0f);
+    debugLog("Corruption level set to: " + String(pet.corruptionLevel));
+}
+
+void DigitalPetApp::debugTriggerMood(PetMood mood) {
+    pet.mood = mood;
+    debugLog("Mood manually set to: " + String(mood));
+}
+
+void DigitalPetApp::debugAddMemory(String action, float intensity) {
+    recordAction(action, intensity);
+    debugLog("Added debug memory: " + action);
+}
+
+void DigitalPetApp::debugPrintState() {
+    debugLog("=== PET STATE DEBUG ===");
+    debugLog("Name: " + pet.name);
+    debugLog("Archetype: " + String(pet.archetype));
+    debugLog("Mood: " + String(pet.mood));
+    debugLog("Corruption: " + String(pet.corruptionLevel));
+    debugLog("Is Alive: " + String(pet.isAlive));
+    debugLog("Is Awake: " + String(pet.isAwake));
+    debugLog("Trait count: " + String(pet.traits.size()));
+    debugLog("Memory count: " + String(pet.memory.size()));
+    debugLog("Total interactions: " + String(pet.totalInteractions));
+    debugLog("=== END STATE DEBUG ===");
 }
