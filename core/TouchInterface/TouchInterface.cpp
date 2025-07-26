@@ -496,3 +496,11 @@ void TouchInterface::printCalibrationInfo() {
 
 String TouchInterface::getTouchStatusString() {
     String status = "Touch: ";
+    if (currentTouch.isPressed) {
+        status += "(" + String(currentTouch.x) + "," + String(currentTouch.y) + ") ";
+        status += "P:" + String(currentTouch.pressure);
+    } else {
+        status += "Not pressed";
+    }
+    return status;
+}
