@@ -331,8 +331,20 @@ private:
     // Private methods - DAC Output
     void updateDACOutput();
     void generateDACWaveform();
+    void generateAdvancedDACWaveform();
+    void generateModulatedOutput(EntropyPoint& point);
+    void generateEntropyPulseOutput(EntropyPoint& point);
     void outputToDAC(uint16_t value);
     void modulateSignal(uint16_t* buffer, uint16_t length);
+    
+    // Private methods - Advanced Analysis Integration
+    void updateAdvancedAnalysis();
+    
+    // Private methods - Performance Optimization
+    void checkMemoryUsage();
+    void optimizeMemoryUsage();
+    void optimizePerformance();
+    void benchmarkPerformance();
     
     // Private methods - UI
     void drawInterface();
@@ -342,12 +354,23 @@ private:
     void drawParameterControls();
     void setupTouchZones();
     void handleControlTouch(TouchPoint touch);
+    void handleGraphTouch(TouchPoint touch);
+    void handleLongPress(TouchPoint touch);
+    bool exportAdvancedAnalysis(String filename);
     
-    // Private methods - Recording
+    // Private methods - Recording and Logging
     bool startRecording();
     void stopRecording();
     void writeDataPoint(EntropyPoint& point);
     bool exportData(String filename, String format);
+    void logEntropyEvent(EntropyPoint& point);
+    void logSystemEvent(String level, String event, String details = "");
+    void logPerformanceMetrics();
+    void logConfigurationChange(String parameter, String oldValue, String newValue);
+    bool createPeriodicBackup();
+    bool saveConfigurationToFile(String filename);
+    bool exportRecentData(String filename, uint16_t sampleCount);
+    void cleanupOldBackups(String backupDir);
     
     // Private methods - Signal Processing
     float applyFilter(float input, uint8_t filterType);
