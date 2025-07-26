@@ -1,90 +1,79 @@
-#ifndef DIGITAL_PET_H
+teres#ifndef DIGITAL_PET_H
 #define DIGITAL_PET_H
 
 #include "../../core/AppManager/BaseApp.h"
 #include "../../core/SystemCore/SystemCore.h"
 #include <ArduinoJson.h>
 #include <SD.h>
+#include <vector>
+#include <deque>
 
 // ========================================
 // DigitalPet - Cyberpet companion app for remu.ii
 // Features mood tracking, entropy influence, customization, and persistence
 // ========================================
 
-// Pet stats configuration
-#define PET_STAT_MAX 100
-#define PET_STAT_MIN 0
+// Memory and corruption configuration
+#define MAX_MEMORY_ENTRIES 50
+#define CORRUPTION_THRESHOLD_LOW 0.3f
+#define CORRUPTION_THRESHOLD_HIGH 0.7f
+#define ENTROPY_SAMPLE_INTERVAL 1000  // ms between entropy readings
 
-// Decay rates (per minute)
-#define HUNGER_DECAY_RATE 2
-#define LONELINESS_DECAY_RATE 1
-#define SLEEP_DECAY_RATE 3
-#define STABILITY_DECAY_RATE 1
-
-// Interaction effects
-#define FEED_AMOUNT 25
-#define PET_AMOUNT 15
-#define PLAY_AMOUNT 20
-#define REST_AMOUNT 30
-
-// Pet states
+// New pet mood states - more psychological than physical
 enum PetMood {
-    MOOD_HAPPY,
-    MOOD_CONTENT,
-    MOOD_NEUTRAL,
-    MOOD_SAD,
-    MOOD_ANGRY,
-    MOOD_SLEEPING,
-    MOOD_SICK,
-    MOOD_CHAOTIC  // High entropy state
+    CALM,        // Low entropy, content state
+    RESTLESS,    // Moderate entropy, seeking attention
+    OBSESSED,    // Focused on specific behavior pattern
+    GLITCHED     // High entropy, corrupted state
 };
 
-enum PetActivity {
-    ACTIVITY_IDLE,
-    ACTIVITY_EATING,
-    ACTIVITY_PLAYING,
-    ACTIVITY_SLEEPING,
-    ACTIVITY_INTERACTING
+// Pet personality traits - can have multiple simultaneously
+enum PetTrait {
+    LOVING,      // Responds well to affection
+    AGGRESSIVE,  // Reacts negatively to touch
+    NEEDY,       // Requires frequent interaction
+    PARANOID     // Suspicious of user actions
 };
 
-// Pet customization
-enum PetAccessory {
-    ACCESSORY_NONE = 0,
-    ACCESSORY_HAT = 1,
-    ACCESSORY_GLASSES = 2,
-    ACCESSORY_BOWTIE = 4,
-    ACCESSORY_ANTENNAE = 8
+// Pet archetypes - defines core personality and behavior
+enum PetArchetype {
+    ORACLE,      // Wise, entropy-reading, offers visions
+    PARASITE,    // Clingy, battery-draining, reacts to neglect
+    MIRROR       // Mimics user patterns, unsettling behavior
 };
 
-// Pet data structure
-struct PetStats {
-    uint8_t mood;           // 0-100
-    uint8_t hunger;         // 0-100 (100 = full)
-    uint8_t loneliness;     // 0-100 (0 = not lonely)
-    uint8_t entropy;        // 0-100 (affected by system entropy)
-    uint8_t sleep;          // 0-100 (100 = well rested)
-    uint8_t stability;      // 0-100 (affected by entropy)
-    uint8_t happiness;      // Calculated from other stats
-    uint8_t health;         // Overall health indicator
+// Room decoration based on treatment
+enum RoomTheme {
+    THEME_LOVING,    // Plants, warm colors
+    THEME_GLITCHED,  // Static, corruption artifacts
+    THEME_NEEDY,     // Toys, attention-seeking items
+    THEME_PARANOID   // Red overlays, "hidden eyes"
 };
 
-struct PetCustomization {
-    uint16_t accessories;   // Bitfield of PetAccessory
-    uint8_t colorScheme;    // Color theme index
-    String name;            // Pet name
-    uint8_t skinType;       // Pet skin/sprite variant
+// Memory entry for storing user interactions
+struct PetMemory {
+    String action;           // Type of interaction (feed, pet, touch, neglect, etc.)
+    unsigned long timestamp; // When it occurred
+    float intensity;         // How significant the interaction was (0.0-1.0)
 };
 
+// New pet state structure - psychological rather than physical
 struct PetState {
-    PetStats stats;
-    PetCustomization custom;
-    PetMood currentMood;
-    PetActivity currentActivity;
-    unsigned long lastUpdate;
-    unsigned long birthTime;
-    unsigned long totalInteractions;
-    uint8_t evolutionStage;  // Pet growth stage
-    bool isAlive;
+    PetMood mood;                    // Current emotional state
+    std::vector<PetTrait> traits;    // Active personality traits
+    float corruptionLevel;           // 0.0 - 1.0, affects behavior/visuals
+    bool isAwake;                    // Sleep/wake cycle
+    bool isObservingUser;            // Whether pet is actively watching
+    std::deque<PetMemory> memory;    // Interaction history buffer
+    uint32_t personalitySeed;        // Unique personality modifier
+    
+    // Archetype and identity
+    PetArchetype archetype;          // Core personality type
+    String name;                     // Pet name
+    unsigned long birthTime;         // When pet was created
+    unsigned long lastUpdate;        // Last state update
+    unsigned long totalInteractions; // Lifetime interaction count
+    bool isAlive;                    // Still functioning
 };
 
 // Touch zones for interaction
@@ -105,17 +94,20 @@ private:
     // Pet state
     PetState pet;
     String saveFilePath;
+    String petTypeFilePath;
     
     // UI state
-    uint8_t selectedAction;
     bool showStats;
-    bool showCustomization;
-    unsigned long lastStatsUpdate;
+    bool showPetSelection;
+    bool firstBoot;
+    unsigned long lastEntropyUpdate;
+    unsigned long lastMoodUpdate;
     unsigned long lastAnimation;
     uint8_t currentAnimFrame;
+    RoomTheme currentRoomTheme;
     
     // Touch zones
-    TouchZone touchZones[6];
+    TouchZone touchZones[8];
     int8_t activeTouchZone;
     
     // Animation data
@@ -123,31 +115,63 @@ private:
     uint8_t animationFrameCount;
     bool animationLoop;
     
-    // Private methods - Pet Logic
-    void updatePetStats();
-    void calculateMood();
-    void calculateHappiness();
-    void applyEntropyInfluence();
-    void handleStatDecay();
-    void checkPetHealth();
+    // Private methods - Memory System
+    void recordAction(String action, float intensity = 1.0f);
+    void updateMemoryBuffer();
+    bool recentNeglect(unsigned long timeWindowMs = 300000); // 5 minutes
+    bool wasRecentlyPunished(unsigned long timeWindowMs = 180000); // 3 minutes
+    float getMemoryInfluence(String actionType, unsigned long timeWindowMs = 600000); // 10 minutes
+    void clearOldMemories();
     
-    // Private methods - Interactions
+    // Private methods - Mood & Corruption System
+    void updateMood();
+    void updateCorruption();
+    void applyEntropyInfluence();
+    float getCurrentEntropy();
+    void processCorruptionEffects();
+    bool isCorrupted() { return pet.corruptionLevel > CORRUPTION_THRESHOLD_LOW; }
+    bool isHighlyCorrupted() { return pet.corruptionLevel > CORRUPTION_THRESHOLD_HIGH; }
+    
+    // Private methods - Archetype System
+    void initializeArchetype(PetArchetype archetype);
+    void updateArchetypeBehavior();
+    String getArchetypeResponse(String interaction);
+    void processOracleBehavior();
+    void processParasiteBehavior();
+    void processMirrorBehavior();
+    
+    // Private methods - Pet Selection
+    void showPetSelectionScreen();
+    bool handlePetSelection(TouchPoint touch);
+    void drawArchetypeOption(int16_t x, int16_t y, PetArchetype archetype, bool selected);
+    void selectArchetype(PetArchetype archetype);
+    bool loadPetType();
+    void savePetType();
+    
+    // Private methods - Interactions (Updated)
+    void interactWithPet();
     void feedPet();
-    void petPet();
-    void playWithPet();
-    void putPetToSleep();
+    void punishPet();
+    void observePet();
     void showPetStats();
-    void customizePet();
     
     // Private methods - Rendering
     void drawPet();
     void drawPetSprite(int16_t x, int16_t y);
+    void drawCorruptedSprite(int16_t x, int16_t y);
     void drawMoodIndicator();
     void drawStatsDisplay();
-    void drawCustomizationMenu();
     void drawInteractionButtons();
-    void drawBackground();
-    void drawPetRoom();
+    void drawReactiveRoom();
+    void drawRoomTheme(RoomTheme theme);
+    void drawGlitchEffects();
+    void drawCorruptionOverlay();
+    
+    // Private methods - Archetype-specific rendering
+    void drawOracleElements();
+    void drawParasiteElements();
+    void drawMirrorElements();
+    void drawArchetypeSprite(int16_t x, int16_t y, PetArchetype archetype, PetMood mood);
     
     // Private methods - Animation
     void updateAnimation();
@@ -159,15 +183,18 @@ private:
     int8_t getTouchedZone(TouchPoint touch);
     void handleZoneTouch(int8_t zone);
     
-    // Private methods - File I/O
+    // Private methods - File I/O (Updated)
     bool loadPetData();
     bool savePetData();
-    void createDefaultPet();
+    void createDefaultPet(PetArchetype archetype);
     bool validateSaveData(JsonDocument& doc);
+    JsonDocument memoryToJson();
+    void memoryFromJson(JsonDocument& doc);
     
-    // Private methods - ASCII Art
-    void drawASCIIMood(int16_t x, int16_t y, PetMood mood);
-    void drawASCIIPet(int16_t x, int16_t y, PetMood mood);
+    // Private methods - Visual Effects
+    void drawCorruptedText(String text, int16_t x, int16_t y, uint16_t color);
+    void drawStaticNoise(int16_t x, int16_t y, int16_t w, int16_t h);
+    void drawEntropyVisualization();
     
     // Animation definitions
     static AnimationFrame idleAnimation[];
@@ -214,18 +241,32 @@ public:
     String getSettingName(uint8_t index) const override;
     void handleSetting(uint8_t index) override;
     
-    // Pet-specific methods
-    PetStats getCurrentStats() const { return pet.stats; }
-    PetMood getCurrentMood() const { return pet.currentMood; }
-    String getPetName() const { return pet.custom.name; }
+    // Pet-specific methods (Updated for new system)
+    PetMood getCurrentMood() const { return pet.mood; }
+    PetArchetype getArchetype() const { return pet.archetype; }
+    float getCorruptionLevel() const { return pet.corruptionLevel; }
+    String getPetName() const { return pet.name; }
     void setPetName(String name);
     bool isPetAlive() const { return pet.isAlive; }
     unsigned long getPetAge() const;
+    size_t getMemoryCount() const { return pet.memory.size(); }
     
-    // Debug methods
+    // Memory system access
+    bool hasRecentMemory(String actionType, unsigned long timeWindowMs = 300000);
+    float getMemoryInfluenceForAction(String actionType);
+    void debugPrintMemory();
+    
+    // Corruption system access
+    void increaseCorruption(float amount);
+    void decreaseCorruption(float amount);
+    bool isCorruptionVisible() const { return pet.corruptionLevel > CORRUPTION_THRESHOLD_LOW; }
+    
+    // Debug methods (Updated)
     void debugResetPet();
-    void debugSetStat(String statName, uint8_t value);
+    void debugSetCorruption(float level);
     void debugTriggerMood(PetMood mood);
+    void debugAddMemory(String action, float intensity);
+    void debugPrintState();
 };
 
 #endif // DIGITAL_PET_H
