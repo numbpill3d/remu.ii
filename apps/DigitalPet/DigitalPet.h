@@ -1,4 +1,4 @@
-cs#ifndef DIGITAL_PET_H
+#ifndef DIGITAL_PET_H
 #define DIGITAL_PET_H
 
 #include "../../core/AppManager/BaseApp.h"
@@ -99,12 +99,14 @@ private:
     // UI state
     bool showStats;
     bool showPetSelection;
+    bool showCustomization;  // Missing declaration - used in cpp
     bool firstBoot;
     unsigned long lastEntropyUpdate;
     unsigned long lastMoodUpdate;
     unsigned long lastAnimation;
     uint8_t currentAnimFrame;
     RoomTheme currentRoomTheme;
+    unsigned long frameCount;  // Missing declaration - used for glitch effects
     
     // Touch zones
     TouchZone touchZones[8];

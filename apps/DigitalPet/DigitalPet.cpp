@@ -28,9 +28,33 @@ const uint8_t DigitalPetApp::PET_SPRITE_SLEEPING[32] = {
     0x01, 0x80, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00
 };
 
+const uint8_t DigitalPetApp::PET_SPRITE_EATING[32] = {
+    0x00, 0x00, 0x07, 0xE0, 0x18, 0x18, 0x20, 0x04, 0x47, 0xE2, 0x4C, 0x32,
+    0x4C, 0x32, 0x47, 0xE2, 0x46, 0x62, 0x26, 0x64, 0x1C, 0x38, 0x07, 0xE0,
+    0x01, 0x80, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00
+};
+
+const uint8_t DigitalPetApp::PET_SPRITE_SICK[32] = {
+    0x00, 0x00, 0x07, 0xE0, 0x18, 0x18, 0x20, 0x04, 0x44, 0x22, 0x44, 0x22,
+    0x44, 0x22, 0x44, 0x22, 0x40, 0x02, 0x20, 0x04, 0x18, 0x18, 0x07, 0xE0,
+    0x01, 0x80, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00
+};
+
 const uint8_t DigitalPetApp::ACCESSORY_HAT_SPRITE[32] = {
     0x0F, 0xF0, 0x18, 0x18, 0x30, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+const uint8_t DigitalPetApp::ACCESSORY_GLASSES_SPRITE[32] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x38, 0x22, 0x44, 0x22, 0x44,
+    0x1C, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+const uint8_t DigitalPetApp::ACCESSORY_BOWTIE_SPRITE[32] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x3C, 0x3C, 0x18, 0x18,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
@@ -47,6 +71,24 @@ AnimationFrame DigitalPetApp::happyAnimation[] = {
     {PET_SPRITE_HAPPY, 500}
 };
 
+AnimationFrame DigitalPetApp::eatingAnimation[] = {
+    {PET_SPRITE_EATING, 800},
+    {PET_SPRITE_IDLE, 400},
+    {PET_SPRITE_EATING, 800}
+};
+
+AnimationFrame DigitalPetApp::sleepingAnimation[] = {
+    {PET_SPRITE_SLEEPING, 2000},
+    {PET_SPRITE_SLEEPING, 2000}
+};
+
+AnimationFrame DigitalPetApp::playingAnimation[] = {
+    {PET_SPRITE_HAPPY, 400},
+    {PET_SPRITE_IDLE, 200},
+    {PET_SPRITE_HAPPY, 400},
+    {PET_SPRITE_IDLE, 200}
+};
+
 // ========================================
 // CONSTRUCTOR / DESTRUCTOR
 // ========================================
@@ -54,12 +96,14 @@ AnimationFrame DigitalPetApp::happyAnimation[] = {
 DigitalPetApp::DigitalPetApp() :
     showStats(false),
     showPetSelection(false),
+    showCustomization(false),
     firstBoot(true),
     lastEntropyUpdate(0),
     lastMoodUpdate(0),
     lastAnimation(0),
     currentAnimFrame(0),
     currentRoomTheme(THEME_LOVING),
+    frameCount(0),
     activeTouchZone(-1),
     currentAnimation(nullptr),
     animationFrameCount(0),
@@ -1717,4 +1761,161 @@ void DigitalPetApp::debugPrintState() {
     debugLog("Memory count: " + String(pet.memory.size()));
     debugLog("Total interactions: " + String(pet.totalInteractions));
     debugLog("=== END STATE DEBUG ===");
+}
+
+// ========================================
+// MISSING METHOD IMPLEMENTATIONS
+// ========================================
+
+void DigitalPetApp::showPetStats() {
+    showStats = true;
+}
+
+void DigitalPetApp::drawPetSprite(int16_t x, int16_t y) {
+    // Alias for drawAnimatedSprite for compatibility
+    drawAnimatedSprite(x, y);
+}
+
+void DigitalPetApp::drawCorruptedSprite(int16_t x, int16_t y) {
+    // Draw sprite with corruption effects
+    const uint8_t* spriteData = PET_SPRITE_IDLE;
+    if (currentAnimation && currentAnimFrame < animationFrameCount) {
+        spriteData = currentAnimation[currentAnimFrame].spriteData;
+    }
+    
+    uint16_t color = COLOR_RED_GLOW; // Corrupted color
+    if (isHighlyCorrupted()) {
+        // Heavy corruption - alternating colors
+        color = (frameCount % 4 < 2) ? COLOR_RED_GLOW : COLOR_PURPLE_GLOW;
+    }
+    
+    displayManager.drawIcon(x, y, spriteData, color);
+}
+
+void DigitalPetApp::drawRoomTheme(RoomTheme theme) {
+    // This functionality is now handled in drawReactiveRoom()
+    // Keep for compatibility
+    drawReactiveRoom();
+}
+
+void DigitalPetApp::drawOracleElements() {
+    int16_t petX = SCREEN_WIDTH / 2 - 16;
+    int16_t petY = SCREEN_HEIGHT / 2 - 16;
+    
+    if (getCurrentEntropy() > 0.7f) {
+        displayManager.setFont(FONT_SMALL);
+        displayManager.drawText(petX - 20, petY, "※", COLOR_PURPLE_GLOW);
+        displayManager.drawText(petX + 35, petY, "※", COLOR_PURPLE_GLOW);
+        displayManager.drawText(petX + 8, petY - 20, "◊", COLOR_BLUE_CYBER);
+    }
+}
+
+void DigitalPetApp::drawParasiteElements() {
+    int16_t petX = SCREEN_WIDTH / 2 - 16;
+    int16_t petY = SCREEN_HEIGHT / 2 - 16;
+    
+    // Draw battery drain indicator
+    if (std::find(pet.traits.begin(), pet.traits.end(), NEEDY) != pet.traits.end()) {
+        displayManager.drawText(petX + 20, petY - 10, "⚡", COLOR_RED_GLOW);
+    }
+    
+    // Draw clinging tendrils when highly corrupted
+    if (isHighlyCorrupted()) {
+        displayManager.drawRetroLine(petX, petY + 16, petX - 10, petY + 25, COLOR_RED_GLOW);
+        displayManager.drawRetroLine(petX + 16, petY + 16, petX + 26, petY + 25, COLOR_RED_GLOW);
+    }
+}
+
+void DigitalPetApp::drawMirrorElements() {
+    int16_t petX = SCREEN_WIDTH / 2 - 16;
+    int16_t petY = SCREEN_HEIGHT / 2 - 16;
+    
+    // Draw reflection/echo effects
+    if (pet.mood == RESTLESS) {
+        // Draw shadow/mirror image slightly offset
+        displayManager.drawIcon(petX + 2, petY + 2, PET_SPRITE_IDLE, COLOR_DARK_GRAY);
+    }
+    
+    // Draw paranoid surveillance symbols
+    if (std::find(pet.traits.begin(), pet.traits.end(), PARANOID) != pet.traits.end()) {
+        displayManager.drawText(petX - 15, petY - 15, "👁", COLOR_BLUE_CYBER);
+    }
+}
+
+void DigitalPetApp::drawArchetypeSprite(int16_t x, int16_t y, PetArchetype archetype, PetMood mood) {
+    // Choose sprite based on archetype and mood
+    const uint8_t* sprite = PET_SPRITE_IDLE;
+    uint16_t color = COLOR_WHITE;
+    
+    switch (archetype) {
+        case ORACLE:
+            sprite = (mood == OBSESSED) ? PET_SPRITE_HAPPY : PET_SPRITE_IDLE;
+            color = COLOR_PURPLE_GLOW;
+            break;
+        case PARASITE:
+            sprite = (mood == GLITCHED) ? PET_SPRITE_SAD : PET_SPRITE_IDLE;
+            color = COLOR_RED_GLOW;
+            break;
+        case MIRROR:
+            sprite = (mood == RESTLESS) ? PET_SPRITE_HAPPY : PET_SPRITE_IDLE;
+            color = COLOR_BLUE_CYBER;
+            break;
+    }
+    
+    displayManager.drawIcon(x, y, sprite, color);
+}
+
+JsonDocument DigitalPetApp::memoryToJson() {
+    DynamicJsonDocument doc(1024);
+    JsonArray memoryArray = doc.createNestedArray("memory");
+    
+    int count = 0;
+    for (auto it = pet.memory.rbegin(); it != pet.memory.rend() && count < 20; ++it, ++count) {
+        JsonObject memObj = memoryArray.createNestedObject();
+        memObj["action"] = it->action;
+        memObj["timestamp"] = it->timestamp;
+        memObj["intensity"] = it->intensity;
+    }
+    
+    return doc;
+}
+
+void DigitalPetApp::memoryFromJson(JsonDocument& doc) {
+    pet.memory.clear();
+    JsonArray memoryArray = doc["memory"];
+    
+    for (JsonVariant mem : memoryArray) {
+        PetMemory memory;
+        memory.action = mem["action"].as<String>();
+        memory.timestamp = mem["timestamp"];
+        memory.intensity = mem["intensity"];
+        pet.memory.push_back(memory);
+    }
+}
+
+void DigitalPetApp::drawCorruptedText(String text, int16_t x, int16_t y, uint16_t color) {
+    String corrupted = corrupted_text(text);
+    displayManager.drawText(x, y, corrupted, color);
+}
+
+void DigitalPetApp::drawStaticNoise(int16_t x, int16_t y, int16_t w, int16_t h) {
+    int noisePoints = (w * h) / 20; // Density control
+    
+    for (int i = 0; i < noisePoints; i++) {
+        int px = x + random(w);
+        int py = y + random(h);
+        uint16_t noiseColor = random(2) ? COLOR_WHITE : COLOR_DARK_GRAY;
+        displayManager.drawRetroRect(px, py, 1, 1, noiseColor, true);
+    }
+}
+
+void DigitalPetApp::drawEntropyVisualization() {
+    float entropy = getCurrentEntropy();
+    int16_t barWidth = entropy * 60; // Scale to 60 pixels max
+    
+    displayManager.setFont(FONT_SMALL);
+    displayManager.drawText(10, 10, "Entropy:", COLOR_WHITE);
+    displayManager.drawRetroRect(70, 10, 62, 8, COLOR_DARK_GRAY, false);
+    displayManager.drawRetroRect(71, 11, barWidth, 6, COLOR_RED_GLOW, true);
+    displayManager.drawText(140, 10, String(int(entropy * 100)) + "%", COLOR_WHITE);
 }

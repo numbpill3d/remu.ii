@@ -22,6 +22,7 @@
 #define COLOR_MID_GRAY      0x4208  // #404040 - Button faces
 #define COLOR_LIGHT_GRAY    0x8410  // #808080 - Disabled elements
 #define COLOR_BLUE_CYBER    0x001F  // #0000FF - Info accents
+#define COLOR_YELLOW        0xFFE0  // #FFFF00 - Warning/attention color
 
 // UI element dimensions
 #define BUTTON_HEIGHT       24
