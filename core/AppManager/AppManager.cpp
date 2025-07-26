@@ -1,5 +1,11 @@
 #include "AppManager.h"
 #include "../../apps/CarCloner/CarCloner.h"
+#include "../../apps/BLEScanner/BLEScanner.h"
+#include "../../apps/PreqScanner/FreqScanner.h"
+#include "../../apps/EntropyBeacon/EntropyBeacon.h"
+#include "../../apps/Sequencer/Sequencer.h"
+#include "../../apps/WifiTools/WiFiTools.h"
+#include "../../apps/DigitalPet/DigitalPet.h"
 
 // Global instance
 AppManager appManager;
@@ -284,29 +290,28 @@ bool AppManager::loadApp(uint8_t appIndex) {
     
     String appName = appRegistry[appIndex].name;
     
-    // Note: These would normally be dynamically loaded
-    // For now, we'll create placeholder instances that show the app name
+    // Create app instances - all apps are now fully implemented
     if (appName == "DigitalPet") {
-        // appInstance = new DigitalPetApp(); // Will implement later
-        Serial.println("[AppManager] DigitalPet app creation deferred");
+        appInstance = new DigitalPetApp();
+        Serial.println("[AppManager] DigitalPet app instantiated");
     } else if (appName == "Sequencer") {
-        // appInstance = new SequencerApp(); // Will implement later
-        Serial.println("[AppManager] Sequencer app creation deferred");
+        appInstance = new SequencerApp();
+        Serial.println("[AppManager] Sequencer app instantiated");
     } else if (appName == "WiFiTools") {
-        // appInstance = new WiFiToolsApp(); // Will implement later
-        Serial.println("[AppManager] WiFiTools app creation deferred");
+        appInstance = new WiFiToolsApp();
+        Serial.println("[AppManager] WiFiTools app instantiated");
     } else if (appName == "BLEScanner") {
-        // appInstance = new BLEScannerApp(); // Will implement later
-        Serial.println("[AppManager] BLEScanner app creation deferred");
+        appInstance = new BLEScannerApp();
+        Serial.println("[AppManager] BLEScanner app instantiated");
     } else if (appName == "CarCloner") {
-        appInstance = new CarCloner();
+        appInstance = new CarClonerApp();
         Serial.println("[AppManager] CarCloner app instantiated");
     } else if (appName == "FreqScanner") {
-        // appInstance = new FreqScannerApp(); // Will implement later
-        Serial.println("[AppManager] FreqScanner app creation deferred");
+        appInstance = new FreqScannerApp();
+        Serial.println("[AppManager] FreqScanner app instantiated");
     } else if (appName == "EntropyBeacon") {
-        // appInstance = new EntropyBeaconApp(); // Will implement later
-        Serial.println("[AppManager] EntropyBeacon app creation deferred");
+        appInstance = new EntropyBeaconApp();
+        Serial.println("[AppManager] EntropyBeacon app instantiated");
     }
     
     if (!appInstance) {

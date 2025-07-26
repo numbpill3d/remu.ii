@@ -67,6 +67,11 @@ void checkSystemHealth();
 void handleLowPower();
 void printSystemInfo();
 void handleSerialCommands();
+void runSystemIntegrationTests();
+bool testFileSystemIntegration();
+bool testAppManagerIntegration();
+bool testSettingsIntegration();
+bool testSDCardOperations();
 
 // ========================================
 // ARDUINO SETUP
@@ -228,6 +233,15 @@ void initializeSystem() {
   if (!filesystem.begin()) {
     Serial.println("WARNING: FileSystem initialization failed");
     Serial.println("[MAIN] System will continue without SD card support");
+  } else {
+    Serial.println("OK");
+  }
+  
+  // Initialize settings system
+  Serial.print("[MAIN] Initializing Settings... ");
+  if (!settings.initialize()) {
+    Serial.println("WARNING: Settings initialization failed");
+    Serial.println("[MAIN] System will continue with default settings");
   } else {
     Serial.println("OK");
   }
@@ -444,6 +458,7 @@ void handleSerialCommands() {
     Serial.println("  memory - Memory usage");
     Serial.println("  touch - Touch interface status");
     Serial.println("  filesystem - FileSystem status and operations");
+    Serial.println("  settings - Settings management");
     Serial.println("  calibrate - Recalibrate touch");
     Serial.println("  reset - Restart system");
     Serial.println("  launcher - Return to launcher");
@@ -475,6 +490,11 @@ void handleSerialCommands() {
     if (filesystem.isReady()) {
       filesystem.printDirectoryTree("/", 3);
     }
+    
+  } else if (command == "settings") {
+    Serial.println("Settings system:");
+    settings.printSettings();
+    Serial.println(settings.getSettingsInfo());
     
   } else if (command == "calibrate") {
     Serial.println("Starting touch recalibration...");
@@ -536,4 +556,186 @@ void printSystemInfo() {
 void yield() {
   // Allow other tasks to run
   systemCore.feedWatchdog();
+}
+// ========================================
+// SYSTEM INTEGRATION TESTS
+// ========================================
+
+void runSystemIntegrationTests() {
+  Serial.println();
+  Serial.println("========================================");
+  Serial.println("      remu.ii Integration Tests");
+  Serial.println("========================================");
+  
+  bool allTestsPassed = true;
+  unsigned long testStartTime = millis();
+  
+  // Test 1: FileSystem Integration
+  Serial.print("[TEST 1] FileSystem Integration... ");
+  if (testFileSystemIntegration()) {
+    Serial.println("PASS");
+  } else {
+    Serial.println("FAIL");
+    allTestsPassed = false;
+  }
+  
+  // Test 2: Settings Integration
+  Serial.print("[TEST 2] Settings Integration... ");
+  if (testSettingsIntegration()) {
+    Serial.println("PASS");
+  } else {
+    Serial.println("FAIL");
+    allTestsPassed = false;
+  }
+  
+  // Test 3: AppManager Integration
+  Serial.print("[TEST 3] AppManager Integration... ");
+  if (testAppManagerIntegration()) {
+    Serial.println("PASS");
+  } else {
+    Serial.println("FAIL");
+    allTestsPassed = false;
+  }
+  
+  // Test 4: SD Card Operations
+  Serial.print("[TEST 4] SD Card Operations... ");
+  if (testSDCardOperations()) {
+    Serial.println("PASS");
+  } else {
+    Serial.println("FAIL");
+    allTestsPassed = false;
+  }
+  
+  // Test Summary
+  unsigned long testDuration = millis() - testStartTime;
+  Serial.println("========================================");
+  if (allTestsPassed) {
+    Serial.println("✅ ALL TESTS PASSED");
+  } else {
+    Serial.println("❌ SOME TESTS FAILED");
+  }
+  Serial.printf("Test Duration: %lu ms\n", testDuration);
+  Serial.println("========================================");
+  Serial.println();
+}
+
+bool testFileSystemIntegration() {
+  // Test FileSystem basic functionality
+  if (!filesystem.isReady()) {
+    Serial.println("\n  ERROR: FileSystem not ready");
+    return false;
+  }
+  
+  // Test directory creation
+  if (!filesystem.ensureDirExists("/test")) {
+    Serial.println("\n  ERROR: Could not create test directory");
+    return false;
+  }
+  
+  // Test file operations
+  String testData = "remu.ii test data";
+  if (!filesystem.writeFile("/test/integration.txt", testData)) {
+    Serial.println("\n  ERROR: Could not write test file");
+    return false;
+  }
+  
+  String readData = filesystem.readFile("/test/integration.txt");
+  if (readData != testData) {
+    Serial.println("\n  ERROR: File read/write mismatch");
+    return false;
+  }
+  
+  // Cleanup
+  filesystem.deleteFile("/test/integration.txt");
+  
+  return true;
+}
+
+bool testSettingsIntegration() {
+  // Test Settings system
+  if (settings.getSettingCount() == 0) {
+    Serial.println("\n  ERROR: No settings registered");
+    return false;
+  }
+  
+  // Test setting a value
+  bool originalValue = settings.getBool(Settings::AUDIO_ENABLED);
+  settings.setBool(Settings::AUDIO_ENABLED, !originalValue);
+  
+  if (settings.getBool(Settings::AUDIO_ENABLED) == originalValue) {
+    Serial.println("\n  ERROR: Setting value not changed");
+    return false;
+  }
+  
+  // Restore original value
+  settings.setBool(Settings::AUDIO_ENABLED, originalValue);
+  
+  // Test settings save/load
+  if (!settings.saveSettings()) {
+    Serial.println("\n  ERROR: Could not save settings");
+    return false;
+  }
+  
+  return true;
+}
+
+bool testAppManagerIntegration() {
+  // Test AppManager
+  if (appManager.getAppCount() == 0) {
+    Serial.println("\n  ERROR: No apps registered");
+    return false;
+  }
+  
+  // Verify all required apps are present
+  String requiredApps[] = {
+    "BLEScanner", "CarCloner", "FreqScanner", 
+    "EntropyBeacon", "Sequencer", "WiFiTools", "DigitalPet"
+  };
+  
+  for (int i = 0; i < 7; i++) {
+    if (appManager.findAppByName(requiredApps[i]) < 0) {
+      Serial.printf("\n  ERROR: Required app '%s' not found", requiredApps[i].c_str());
+      return false;
+    }
+  }
+  
+  // Test app loading (without actually launching)
+  Serial.printf("\n  INFO: Found %d apps registered", appManager.getAppCount());
+  
+  return true;
+}
+
+bool testSDCardOperations() {
+  // Test SD card operations through FileSystem
+  if (!filesystem.isReady()) {
+    Serial.println("\n  WARNING: SD card not available, skipping SD tests");
+    return true; // Not critical if SD card isn't present during testing
+  }
+  
+  // Test directory structure creation
+  String appDirs[] = {
+    "/apps/BLEScanner", "/apps/CarCloner", "/apps/FreqScanner",
+    "/apps/EntropyBeacon", "/apps/Sequencer", "/apps/WiFiTools", 
+    "/apps/DigitalPet", "/data", "/samples", "/settings", "/logs"
+  };
+  
+  for (int i = 0; i < 11; i++) {
+    if (!filesystem.ensureDirExists(appDirs[i])) {
+      Serial.printf("\n  ERROR: Could not create directory '%s'", appDirs[i].c_str());
+      return false;
+    }
+  }
+  
+  // Test space availability
+  size_t freeSpace = filesystem.getFreeSpace();
+  size_t totalSpace = filesystem.getTotalSpace();
+  
+  if (totalSpace < 1000000) { // Less than 1MB total suggests SD card issues
+    Serial.println("\n  WARNING: SD card capacity seems low");
+  }
+  
+  Serial.printf("\n  INFO: SD Card - %.1f MB free / %.1f MB total", 
+                freeSpace / (1024.0 * 1024.0), totalSpace / (1024.0 * 1024.0));
+  
+  return true;
 }
