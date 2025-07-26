@@ -1612,3 +1612,650 @@ void BLEScanner::drawDeviceEntry(int y, const BLEDeviceInfo& device, bool select
     
     // Signal strength icon
     drawSignalStrengthIcon(iconX, y + 6, device.rssi);
+    iconX += ICON_SIZE + 2;
+    
+    // Label icon
+    drawLabelIcon(iconX, y + 6, device.isLabeled());
+    iconX += ICON_SIZE + 2;
+    
+    // Anomaly icon
+    if (device.hasAnomalies()) {
+        drawAnomalyIcon(iconX, y + 6, device.anomalies);
+        iconX += ICON_SIZE + 2;
+    }
+    
+    // Device info text
+    display.setTextColor(deviceColor);
+    display.setTextSize(1);
+    display.setCursor(iconX + 5, y + 2);
+    
+    // Show label if available, otherwise MAC
+    String displayText = device.isLabeled() ? device.label : device.macAddress;
+    if (displayText.length() > 18) {
+        displayText = displayText.substring(0, 15) + "...";
+    }
+    display.print(displayText);
+    
+    // RSSI value
+    display.setCursor(iconX + 5, y + 14);
+    display.setTextColor(device.rssi > -50 ? COLOR_GREEN : 
+                        device.rssi > -70 ? COLOR_YELLOW : COLOR_RED);
+    display.print(formatRSSI(device.rssi));
+    
+    // Scan count
+    display.setCursor(SCREEN_WIDTH - 50, y + 8);
+    display.setTextColor(COLOR_GRAY_LIGHT);
+    display.print(String(device.scanCount));
+}
+
+void BLEScanner::drawSignalStrengthIcon(int x, int y, int8_t rssi) {
+    DisplayManager& display = DisplayManager::getInstance();
+    
+    uint16_t color = rssi > -50 ? COLOR_GREEN : 
+                    rssi > -70 ? COLOR_YELLOW : COLOR_RED;
+    
+    // Draw signal bars
+    int bars = map(rssi, -100, -30, 1, 4);
+    bars = constrain(bars, 1, 4);
+    
+    for (int i = 0; i < 4; i++) {
+        int barHeight = (i + 1) * 2;
+        uint16_t barColor = (i < bars) ? color : COLOR_GRAY_DARK;
+        display.fillRect(x + i * 2, y + 8 - barHeight, 1, barHeight, barColor);
+    }
+}
+
+void BLEScanner::drawLabelIcon(int x, int y, bool labeled) {
+    DisplayManager& display = DisplayManager::getInstance();
+    
+    uint16_t color = labeled ? COLOR_GREEN : COLOR_GRAY_DARK;
+    
+    // Draw label icon (tag shape)
+    display.drawRect(x, y + 2, 8, 6, color);
+    if (labeled) {
+        display.fillRect(x + 1, y + 3, 6, 4, color);
+    }
+    display.drawPixel(x + 8, y + 5, color);
+}
+
+void BLEScanner::drawAnomalyIcon(int x, int y, uint32_t anomalies) {
+    DisplayManager& display = DisplayManager::getInstance();
+    
+    // Determine color based on anomaly severity
+    uint16_t color = COLOR_RED;
+    if (anomalies & (ANOMALY_SIGNAL_SPOOFING | ANOMALY_RSSI_SUDDEN_CHANGE)) {
+        color = COLOR_RED;
+    } else if (anomalies & (ANOMALY_RSSI_OUTLIER | ANOMALY_MAC_RANDOMIZED)) {
+        color = COLOR_YELLOW;
+    } else {
+        color = COLOR_CYAN;
+    }
+    
+    // Draw warning triangle
+    display.drawTriangle(x + 4, y, x, y + 8, x + 8, y + 8, color);
+    display.drawPixel(x + 4, y + 3, COLOR_BLACK);
+    display.drawPixel(x + 4, y + 4, COLOR_BLACK);
+    display.drawPixel(x + 4, y + 6, COLOR_BLACK);
+}
+
+uint16_t BLEScanner::getDeviceColor(const BLEDeviceInfo& device) {
+    if (device.hasAnomalies()) {
+        return colorAnomaly;
+    } else if (device.isLabeled()) {
+        return colorLabeled;
+    } else if (device.statusFlags & DEVICE_NEW) {
+        return colorNew;
+    } else {
+        return colorNormal;
+    }
+}
+
+String BLEScanner::formatRSSI(int8_t rssi) {
+    return String(rssi) + "dBm";
+}
+
+String BLEScanner::formatTime(unsigned long timestamp) {
+    unsigned long seconds = timestamp / 1000;
+    unsigned long minutes = seconds / 60;
+    unsigned long hours = minutes / 60;
+    
+    seconds %= 60;
+    minutes %= 60;
+    hours %= 24;
+    
+    String timeStr = "";
+    if (hours > 0) {
+        timeStr += String(hours) + "h";
+    }
+    if (minutes > 0) {
+        timeStr += String(minutes) + "m";
+    }
+    timeStr += String(seconds) + "s";
+    
+    return timeStr;
+}
+
+String BLEScanner::formatDuration(unsigned long duration) {
+    return formatTime(duration);
+}
+
+// ========================================
+// Touch Handling Methods
+// ========================================
+
+TouchZone BLEScanner::identifyTouchZone(TouchPoint touch) {
+    int x = touch.x;
+    int y = touch.y;
+    
+    // Header area
+    if (y < HEADER_HEIGHT) {
+        return ZONE_NONE;
+    }
+    
+    // Status bar area
+    if (y > SCREEN_HEIGHT - STATUS_BAR_HEIGHT) {
+        return ZONE_NONE;
+    }
+    
+    // Control buttons area
+    int controlY = SCREEN_HEIGHT - STATUS_BAR_HEIGHT - 25;
+    if (y >= controlY && y <= controlY + 20) {
+        if (x >= 5 && x <= 65) return ZONE_SCAN_TOGGLE;
+        if (x >= 75 && x <= 135) return ZONE_VIEW_TOGGLE;
+        if (x >= 145 && x <= 205) return ZONE_LOG_BUTTON;
+    }
+    
+    // Device list area
+    if (uiState.currentView == VIEW_DEVICE_LIST) {
+        int listY = HEADER_HEIGHT + 5;
+        if (y >= listY && y < controlY) {
+            return ZONE_DEVICE_LIST;
+        }
+    }
+    
+    // Detail view buttons
+    if (uiState.currentView == VIEW_DEVICE_DETAILS) {
+        int buttonY = SCREEN_HEIGHT - STATUS_BAR_HEIGHT - 30;
+        if (y >= buttonY && y <= buttonY + 20) {
+            if (x >= 5 && x <= 65) return ZONE_LABEL_BUTTON;
+            if (x >= 75 && x <= 135) return ZONE_LOG_BUTTON;
+            if (x >= SCREEN_WIDTH - 65 && x <= SCREEN_WIDTH - 5) return ZONE_BACK_BUTTON;
+        }
+    }
+    
+    return ZONE_NONE;
+}
+
+void BLEScanner::handleDeviceListTouch(TouchPoint touch) {
+    int listY = HEADER_HEIGHT + 5;
+    int controlY = SCREEN_HEIGHT - STATUS_BAR_HEIGHT - 25;
+    
+    if (touch.y < listY || touch.y >= controlY) return;
+    
+    // Calculate which device was touched
+    int itemIndex = (touch.y - listY) / DEVICE_LIST_ITEM_HEIGHT;
+    int deviceIndex = uiState.scrollOffset + itemIndex;
+    
+    if (deviceIndex >= 0 && deviceIndex < deviceOrder.size()) {
+        if (uiState.selectedDevice == deviceIndex) {
+            // Double tap - show device details
+            uiState.currentView = VIEW_DEVICE_DETAILS;
+        } else {
+            // Single tap - select device
+            uiState.selectedDevice = deviceIndex;
+        }
+    }
+}
+
+void BLEScanner::handleDeviceDetailsTouch(TouchPoint touch) {
+    // Touch handling for device details view is managed in main handleTouch
+    // This method could be extended for specific detail view interactions
+}
+
+void BLEScanner::handleLabelingTouch(TouchPoint touch) {
+    if (uiState.selectedDevice < 0 || uiState.selectedDevice >= deviceOrder.size()) {
+        return;
+    }
+    
+    String macAddress = deviceOrder[uiState.selectedDevice];
+    
+    // Handle suggestion buttons
+    int y = HEADER_HEIGHT + 100; // Position after suggestions
+    if (touch.y >= y && touch.y <= y + 60) {
+        if (touch.x >= 10 && touch.x <= 200) {
+            // Determine which suggestion was tapped
+            int suggestionIndex = (touch.y - y) / 12;
+            String newLabel = "";
+            
+            switch (suggestionIndex) {
+                case 0:
+                    newLabel = generateAutoLabel(devices[macAddress]);
+                    break;
+                case 1:
+                    newLabel = "My Device";
+                    break;
+                case 2:
+                    newLabel = "Phone";
+                    break;
+                case 3:
+                    newLabel = "Laptop";
+                    break;
+            }
+            
+            if (!newLabel.isEmpty()) {
+                labelDevice(macAddress, newLabel);
+                uiState.currentView = VIEW_DEVICE_DETAILS;
+            }
+        }
+    }
+    
+    // Handle action buttons
+    int buttonY = SCREEN_HEIGHT - STATUS_BAR_HEIGHT - 50;
+    if (touch.y >= buttonY && touch.y <= buttonY + 20) {
+        if (touch.x >= 5 && touch.x <= 85) {
+            // Auto label button
+            String autoLabel = generateAutoLabel(devices[macAddress]);
+            labelDevice(macAddress, autoLabel);
+            uiState.currentView = VIEW_DEVICE_DETAILS;
+        } else if (touch.x >= 95 && touch.x <= 175) {
+            // Remove label button
+            removeLabelFromDevice(macAddress);
+            uiState.currentView = VIEW_DEVICE_DETAILS;
+        }
+    }
+    
+    buttonY += 25;
+    if (touch.y >= buttonY && touch.y <= buttonY + 20) {
+        if (touch.x >= 5 && touch.x <= 65) {
+            // Back button
+            uiState.currentView = VIEW_DEVICE_DETAILS;
+        }
+    }
+}
+
+// ========================================
+// Configuration Methods
+// ========================================
+
+void BLEScanner::loadConfiguration() {
+    if (!filesystem.fileExists(configFilePath)) {
+        debugLog("BLEScanner: No config file, using defaults");
+        return;
+    }
+    
+    String content = filesystem.readFile(configFilePath);
+    if (content.isEmpty()) {
+        debugLog("BLEScanner: Empty config file");
+        return;
+    }
+    
+    DynamicJsonDocument doc(1024);
+    DeserializationError error = deserializeJson(doc, content);
+    
+    if (error) {
+        debugLog("BLEScanner: Failed to parse config JSON: " + String(error.c_str()));
+        return;
+    }
+    
+    // Load configuration values
+    config.scanDuration = doc["scanDuration"] | config.scanDuration;
+    config.scanInterval = doc["scanInterval"] | config.scanInterval;
+    config.rssiThreshold = doc["rssiThreshold"] | config.rssiThreshold;
+    config.enableAnomalyDetection = doc["enableAnomalyDetection"] | config.enableAnomalyDetection;
+    config.autoLabelKnownDevices = doc["autoLabelKnownDevices"] | config.autoLabelKnownDevices;
+    config.logToSD = doc["logToSD"] | config.logToSD;
+    config.anomalySensitivity = doc["anomalySensitivity"] | config.anomalySensitivity;
+    config.deviceTimeout = doc["deviceTimeout"] | config.deviceTimeout;
+    
+    debugLog("BLEScanner: Configuration loaded");
+}
+
+void BLEScanner::saveConfiguration() {
+    DynamicJsonDocument doc(1024);
+    
+    doc["scanDuration"] = config.scanDuration;
+    doc["scanInterval"] = config.scanInterval;
+    doc["rssiThreshold"] = config.rssiThreshold;
+    doc["enableAnomalyDetection"] = config.enableAnomalyDetection;
+    doc["autoLabelKnownDevices"] = config.autoLabelKnownDevices;
+    doc["logToSD"] = config.logToSD;
+    doc["anomalySensitivity"] = config.anomalySensitivity;
+    doc["deviceTimeout"] = config.deviceTimeout;
+    
+    String content;
+    serializeJsonPretty(doc, content);
+    
+    if (filesystem.writeFile(configFilePath, content)) {
+        debugLog("BLEScanner: Configuration saved");
+    } else {
+        debugLog("BLEScanner: Failed to save configuration");
+    }
+}
+
+void BLEScanner::resetConfiguration() {
+    config = ScanConfig();
+    saveConfiguration();
+}
+
+// ========================================
+// Utility Methods
+// ========================================
+
+void BLEScanner::cleanupOldDevices() {
+    unsigned long currentTime = millis();
+    std::vector<String> toRemove;
+    
+    for (auto& devicePair : devices) {
+        BLEDeviceInfo& device = devicePair.second;
+        
+        if ((currentTime - device.lastSeen) > config.deviceTimeout) {
+            device.statusFlags |= DEVICE_TIMEOUT;
+            device.statusFlags &= ~DEVICE_ACTIVE;
+            
+            // Remove very old devices (over 1 hour)
+            if ((currentTime - device.lastSeen) > 3600000) {
+                toRemove.push_back(devicePair.first);
+            }
+        }
+    }
+    
+    // Remove old devices
+    for (const String& macAddress : toRemove) {
+        devices.erase(macAddress);
+        
+        // Remove from device order
+        auto it = std::find(deviceOrder.begin(), deviceOrder.end(), macAddress);
+        if (it != deviceOrder.end()) {
+            deviceOrder.erase(it);
+        }
+        
+        deviceCount--;
+    }
+    
+    if (!toRemove.empty()) {
+        debugLog("BLEScanner: Cleaned up " + String(toRemove.size()) + " old devices");
+    }
+}
+
+void BLEScanner::sortDevicesByRSSI() {
+    std::sort(deviceOrder.begin(), deviceOrder.end(), 
+              [this](const String& a, const String& b) {
+                  return devices[a].rssi > devices[b].rssi;
+              });
+}
+
+void BLEScanner::sortDevicesByTime() {
+    std::sort(deviceOrder.begin(), deviceOrder.end(), 
+              [this](const String& a, const String& b) {
+                  return devices[a].lastSeen > devices[b].lastSeen;
+              });
+}
+
+bool BLEScanner::isValidMACAddress(const String& mac) {
+    if (mac.length() != 17) return false;
+    
+    for (int i = 0; i < 17; i++) {
+        if (i % 3 == 2) {
+            if (mac.charAt(i) != ':') return false;
+        } else {
+            char c = mac.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))) {
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+String BLEScanner::sanitizeDeviceName(const String& name) {
+    String sanitized = name;
+    sanitized.replace('\0', ' ');
+    sanitized.replace('\n', ' ');
+    sanitized.replace('\r', ' ');
+    sanitized.trim();
+    
+    if (sanitized.length() > BLE_NAME_MAX_LENGTH) {
+        sanitized = sanitized.substring(0, BLE_NAME_MAX_LENGTH);
+    }
+    
+    return sanitized;
+}
+
+int BLEScanner::findDeviceIndex(const String& macAddress) {
+    for (int i = 0; i < deviceOrder.size(); i++) {
+        if (deviceOrder[i] == macAddress) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// ========================================
+// Public Interface Methods
+// ========================================
+
+void BLEScanner::toggleScanning() {
+    if (scanning) {
+        stopScan();
+    } else {
+        startScan();
+    }
+}
+
+void BLEScanner::clearDeviceList() {
+    devices.clear();
+    deviceOrder.clear();
+    anomalyEvents.clear();
+    deviceCount = 0;
+    
+    uiState.selectedDevice = -1;
+    uiState.scrollOffset = 0;
+    
+    // Reset statistics
+    stats.uniqueDevicesFound = 0;
+    stats.labeledDevices = 0;
+    
+    debugLog("BLEScanner: Device list cleared");
+}
+
+void BLEScanner::exportDeviceData() {
+    exportLogData("json");
+    exportLogData("csv");
+    debugLog("BLEScanner: Device data exported");
+}
+
+// ========================================
+// BaseApp Optional Overrides
+// ========================================
+
+void BLEScanner::onPause() {
+    debugLog("BLEScanner: Application paused");
+    stopScan();
+    saveState();
+}
+
+void BLEScanner::onResume() {
+    debugLog("BLEScanner: Application resumed");
+    loadState();
+    if (uiState.scanningActive) {
+        startScan();
+    }
+}
+
+bool BLEScanner::saveState() {
+    DynamicJsonDocument doc(2048);
+    
+    doc["scanningActive"] = uiState.scanningActive;
+    doc["currentView"] = (int)uiState.currentView;
+    doc["selectedDevice"] = uiState.selectedDevice;
+    doc["scrollOffset"] = uiState.scrollOffset;
+    
+    // Save statistics
+    JsonObject statsObj = doc.createNestedObject("statistics");
+    statsObj["totalDevicesFound"] = stats.totalDevicesFound;
+    statsObj["uniqueDevicesFound"] = stats.uniqueDevicesFound;
+    statsObj["anomaliesDetected"] = stats.anomaliesDetected;
+    statsObj["totalScanTime"] = stats.totalScanTime;
+    
+    String content;
+    serializeJsonPretty(doc, content);
+    
+    String statePath = BLE_SCANNER_DATA_DIR "/state.json";
+    return filesystem.writeFile(statePath, content);
+}
+
+bool BLEScanner::loadState() {
+    String statePath = BLE_SCANNER_DATA_DIR "/state.json";
+    
+    if (!filesystem.fileExists(statePath)) {
+        return true; // No state file is okay
+    }
+    
+    String content = filesystem.readFile(statePath);
+    if (content.isEmpty()) {
+        return true;
+    }
+    
+    DynamicJsonDocument doc(2048);
+    DeserializationError error = deserializeJson(doc, content);
+    
+    if (error) {
+        debugLog("BLEScanner: Failed to parse state JSON: " + String(error.c_str()));
+        return false;
+    }
+    
+    uiState.scanningActive = doc["scanningActive"] | false;
+    uiState.currentView = (ViewMode)(doc["currentView"] | (int)VIEW_DEVICE_LIST);
+    uiState.selectedDevice = doc["selectedDevice"] | -1;
+    uiState.scrollOffset = doc["scrollOffset"] | 0;
+    
+    // Load statistics
+    if (doc.containsKey("statistics")) {
+        JsonObject statsObj = doc["statistics"];
+        stats.totalDevicesFound = statsObj["totalDevicesFound"] | 0;
+        stats.uniqueDevicesFound = statsObj["uniqueDevicesFound"] | 0;
+        stats.anomaliesDetected = statsObj["anomaliesDetected"] | 0;
+        stats.totalScanTime = statsObj["totalScanTime"] | 0;
+    }
+    
+    return true;
+}
+
+bool BLEScanner::handleMessage(AppMessage message, void* data) {
+    switch (message) {
+        case MSG_PAUSE:
+            onPause();
+            return true;
+            
+        case MSG_RESUME:
+            onResume();
+            return true;
+            
+        case MSG_LOW_MEMORY:
+            // Reduce memory usage by clearing old devices
+            cleanupOldDevices();
+            
+            // Limit anomaly events
+            if (anomalyEvents.size() > 50) {
+                anomalyEvents.erase(anomalyEvents.begin(),
+                                  anomalyEvents.begin() + anomalyEvents.size() - 50);
+            }
+            return true;
+            
+        case MSG_SHUTDOWN:
+            cleanup();
+            return true;
+            
+        default:
+            return BaseApp::handleMessage(message, data);
+    }
+}
+
+// ========================================
+// Settings Interface Implementation
+// ========================================
+
+String BLEScanner::getSettingName(uint8_t index) const {
+    switch (index) {
+        case 0: return "Scan Duration";
+        case 1: return "RSSI Threshold";
+        case 2: return "Anomaly Detection";
+        case 3: return "Auto Labeling";
+        case 4: return "SD Card Logging";
+        case 5: return "Anomaly Sensitivity";
+        case 6: return "Export Data";
+        case 7: return "Reset Settings";
+        default: return "";
+    }
+}
+
+void BLEScanner::handleSetting(uint8_t index) {
+    switch (index) {
+        case 0: // Scan Duration
+            config.scanDuration = (config.scanDuration == 5000) ? 10000 :
+                                 (config.scanDuration == 10000) ? 30000 : 5000;
+            debugLog("BLEScanner: Scan duration set to " + String(config.scanDuration) + "ms");
+            break;
+            
+        case 1: // RSSI Threshold
+            config.rssiThreshold = (config.rssiThreshold == -70) ? -60 :
+                                  (config.rssiThreshold == -60) ? -80 : -70;
+            debugLog("BLEScanner: RSSI threshold set to " + String(config.rssiThreshold) + "dBm");
+            break;
+            
+        case 2: // Anomaly Detection
+            config.enableAnomalyDetection = !config.enableAnomalyDetection;
+            debugLog("BLEScanner: Anomaly detection " +
+                    String(config.enableAnomalyDetection ? "enabled" : "disabled"));
+            break;
+            
+        case 3: // Auto Labeling
+            config.autoLabelKnownDevices = !config.autoLabelKnownDevices;
+            debugLog("BLEScanner: Auto labeling " +
+                    String(config.autoLabelKnownDevices ? "enabled" : "disabled"));
+            break;
+            
+        case 4: // SD Card Logging
+            config.logToSD = !config.logToSD;
+            debugLog("BLEScanner: SD logging " +
+                    String(config.logToSD ? "enabled" : "disabled"));
+            break;
+            
+        case 5: // Anomaly Sensitivity
+            config.anomalySensitivity = (config.anomalySensitivity < 0.5) ? 0.5 :
+                                       (config.anomalySensitivity < 0.8) ? 0.8 : 0.3;
+            debugLog("BLEScanner: Anomaly sensitivity set to " +
+                    String(config.anomalySensitivity, 1));
+            break;
+            
+        case 6: // Export Data
+            exportDeviceData();
+            break;
+            
+        case 7: // Reset Settings
+            resetConfiguration();
+            resetStatistics();
+            debugLog("BLEScanner: Settings reset to defaults");
+            break;
+    }
+    
+    saveConfiguration();
+}
+
+// ========================================
+// BLE Scan Callback Implementation
+// ========================================
+
+void BLEScanCallback::onResult(BLEAdvertisedDevice advertisedDevice) {
+    if (!scanner) return;
+    
+    // Filter by RSSI threshold
+    if (advertisedDevice.haveRSSI() &&
+        advertisedDevice.getRSSI() < scanner->config.rssiThreshold) {
+        return;
+    }
+    
+    // Update device info through the scanner
+    scanner->updateDeviceInfo(advertisedDevice);
+}

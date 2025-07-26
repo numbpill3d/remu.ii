@@ -53,12 +53,27 @@ enum DACMode {
 #define GRAPH_X 20
 #define GRAPH_Y 40
 
+// Advanced entropy generator types
+enum EntropyGeneratorType {
+    ENTROPY_ADC_NOISE,      // Raw ADC noise
+    ENTROPY_LCG,            // Linear Congruential Generator
+    ENTROPY_MERSENNE,       // Mersenne Twister
+    ENTROPY_LOGISTIC_MAP,   // Chaotic logistic map
+    ENTROPY_HENON_MAP,      // Hénon attractor
+    ENTROPY_LORENZ,         // Lorenz system
+    ENTROPY_LFSR,           // Linear Feedback Shift Register
+    ENTROPY_CHAOS_COMBINED  // Multiple chaos generators combined
+};
+
 // Entropy data point
 struct EntropyPoint {
     uint16_t value;         // Raw ADC value (0-4095)
     float normalized;       // Normalized to 0.0-1.0
     unsigned long timestamp; // When sample was taken
     bool anomaly;           // Flagged as anomalous
+    EntropyGeneratorType source; // Which generator produced this
+    float shannonEntropy;   // Information content
+    float complexity;       // Algorithmic complexity estimate
 };
 
 // Frequency bin for spectrum analysis
@@ -68,14 +83,119 @@ struct FrequencyBin {
     float phase;           // Phase
 };
 
-// Anomaly detection
+// Advanced entropy generators state
+struct EntropyGenerators {
+    // Linear Congruential Generator
+    struct {
+        uint32_t seed;
+        uint32_t a;        // Multiplier
+        uint32_t c;        // Increment
+        uint32_t m;        // Modulus
+    } lcg;
+    
+    // Mersenne Twister state
+    struct {
+        uint32_t mt[624];
+        int index;
+        bool initialized;
+    } mersenne;
+    
+    // Logistic Map
+    struct {
+        float x;           // Current value
+        float r;           // Growth parameter
+    } logistic;
+    
+    // Hénon Map
+    struct {
+        float x, y;        // Current coordinates
+        float a, b;        // Parameters
+    } henon;
+    
+    // Lorenz System
+    struct {
+        float x, y, z;     // State variables
+        float sigma, rho, beta; // Parameters
+        float dt;          // Time step
+    } lorenz;
+    
+    // Linear Feedback Shift Register
+    struct {
+        uint32_t state;
+        uint32_t taps;
+    } lfsr;
+    
+    EntropyGeneratorType activeGenerator;
+    bool useMultipleSources;
+    float mixingWeight[8];  // Weights for combining generators
+};
+
+// Mathematical entropy analysis
+struct EntropyAnalysis {
+    // Shannon entropy calculation
+    float shannonEntropy;
+    float conditionalEntropy;
+    float mutualInformation;
+    
+    // Kolmogorov complexity estimation
+    float compressionRatio;
+    float algorithmicComplexity;
+    
+    // Statistical tests
+    float chiSquareValue;
+    float chiSquarePValue;
+    float serialCorrelation[10]; // Lag correlations
+    
+    // Spectral analysis
+    float spectralEntropy;
+    float dominantFrequency;
+    float spectralFlatness;
+    
+    // Lyapunov exponent (chaos measure)
+    float lyapunovExponent;
+    float fractalDimension;
+    
+    // Pattern analysis
+    uint32_t patternRepeats;
+    float compressionEfficiency;
+    float predictability;
+};
+
+// Advanced anomaly detection
 struct AnomalyDetector {
+    // Statistical detection
     float mean;            // Running mean
     float variance;        // Running variance
     float threshold;       // Anomaly threshold (stddev multiplier)
     uint16_t windowSize;   // Analysis window size
     bool enabled;          // Detection enabled
     uint32_t anomalyCount; // Total anomalies detected
+    
+    // Mahalanobis distance
+    float mahalanobisThreshold;
+    float covarianceMatrix[4]; // 2x2 covariance for x,y pairs
+    
+    // Pattern recognition
+    uint8_t patternBuffer[32]; // Recent pattern history
+    uint8_t patternIndex;
+    uint32_t repeatedPatterns;
+    
+    // Temporal anomalies
+    unsigned long expectedInterval;
+    float intervalVariance;
+    uint32_t timingAnomalies;
+    
+    // Cross-correlation detection
+    float crossCorrelationThreshold;
+    float maxCrossCorrelation;
+    
+    // Machine learning anomalies (simple clustering)
+    struct {
+        float centroids[4][2]; // 4 cluster centers in 2D
+        float clusterRadii[4];
+        uint8_t activeCluster;
+        bool initialized;
+    } clustering;
 };
 
 // Visualization state
@@ -130,6 +250,10 @@ private:
     unsigned long lastSampleTime;
     unsigned long sampleInterval; // Microseconds between samples
     
+    // Advanced entropy system
+    EntropyGenerators generators;
+    EntropyAnalysis analysis;
+    
     // Visualization state
     EntropyVisualization viz;
     AnomalyDetector anomalyDetector;
@@ -146,6 +270,39 @@ private:
     // File recording
     File recordingFile;
     String recordingPath;
+    
+    // Private methods - Advanced Entropy Generation
+    void initializeEntropyGenerators();
+    uint32_t generateLCG();
+    uint32_t generateMersenneTwister();
+    float generateLogisticMap();
+    void generateHenonMap(float* x, float* y);
+    void generateLorenzSystem(float* x, float* y, float* z);
+    uint32_t generateLFSR();
+    uint32_t generateChaoticCombined();
+    uint32_t mixEntropySources(uint32_t* sources, uint8_t count);
+    void seedGenerators(uint32_t seed);
+    
+    // Private methods - Mathematical Analysis
+    float calculateShannonEntropy(uint16_t* data, uint16_t length);
+    float calculateConditionalEntropy(uint16_t* data, uint16_t length);
+    float calculateMutualInformation(uint16_t* dataX, uint16_t* dataY, uint16_t length);
+    float estimateKolmogorovComplexity(uint16_t* data, uint16_t length);
+    float calculateCompressionRatio(uint8_t* data, uint16_t length);
+    float performChiSquareTest(uint16_t* data, uint16_t length);
+    void calculateSerialCorrelation(uint16_t* data, uint16_t length);
+    float calculateSpectralEntropy();
+    float calculateLyapunovExponent(float* trajectory, uint16_t length);
+    float calculateFractalDimension(uint16_t* data, uint16_t length);
+    
+    // Private methods - Advanced Anomaly Detection
+    void initializeAdvancedAnomalyDetection();
+    float calculateMahalanobisDistance(float x, float y);
+    bool detectPatternAnomalies(uint16_t value);
+    bool detectTemporalAnomalies(unsigned long timestamp);
+    float calculateCrossCorrelation(uint16_t* data1, uint16_t* data2, uint16_t length);
+    void updateClustering(float x, float y);
+    bool isClusterAnomaly(float x, float y);
     
     // Private methods - Sampling
     void sampleEntropy();

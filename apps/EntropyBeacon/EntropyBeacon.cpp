@@ -63,8 +63,14 @@ EntropyBeaconApp::EntropyBeaconApp() :
     viz.recordStartTime = 0;
     viz.samplesRecorded = 0;
     
+    // Initialize advanced entropy generators
+    initializeEntropyGenerators();
+    
     // Initialize anomaly detector
     initializeAnomalyDetector();
+    
+    // Initialize advanced anomaly detection
+    initializeAdvancedAnomalyDetection();
 }
 
 EntropyBeaconApp::~EntropyBeaconApp() {

@@ -1,4 +1,5 @@
 #include "AppManager.h"
+#include "../../apps/CarCloner/CarCloner.h"
 
 // Global instance
 AppManager appManager;
@@ -298,8 +299,8 @@ bool AppManager::loadApp(uint8_t appIndex) {
         // appInstance = new BLEScannerApp(); // Will implement later
         Serial.println("[AppManager] BLEScanner app creation deferred");
     } else if (appName == "CarCloner") {
-        // appInstance = new CarClonerApp(); // Will implement later
-        Serial.println("[AppManager] CarCloner app creation deferred");
+        appInstance = new CarCloner();
+        Serial.println("[AppManager] CarCloner app instantiated");
     } else if (appName == "FreqScanner") {
         // appInstance = new FreqScannerApp(); // Will implement later
         Serial.println("[AppManager] FreqScanner app creation deferred");
