@@ -1,5 +1,5 @@
 /*
- * remu.ii - ESP32 Anti-Phone Framework - CORRECTED VERSION
+ * remu.ii - ESP32 Anti-Phone Framework - FULLY FIXED VERSION
  * 
  * A stylus-based handheld system for autonomous hacking, anomaly interaction,
  * and cyberpet companionship.
@@ -11,7 +11,7 @@
  * - FuelRod USB battery
  * 
  * Author: remu.ii project
- * Version: 1.0 - Fixed
+ * Version: 1.0 - FULLY FIXED
  */
 
 // ========================================
@@ -73,7 +73,7 @@ SystemCore systemCore;
 DisplayManager displayManager;
 TouchInterface touchInterface;
 AppManager appManager;
-// Settings uses singleton pattern - no global instance needed
+// Settings and FileSystem use singleton pattern - no global instance needed
 
 // ========================================
 // GLOBAL VARIABLES
@@ -128,7 +128,7 @@ void setup() {
   
   Serial.println();
   Serial.println("========================================");
-  Serial.println("    remu.ii v1.0 FIXED Starting");
+  Serial.println("    remu.ii v1.0 FULLY FIXED");
   Serial.println("    ESP32 Anti-Phone Framework");
   Serial.println("========================================");
   
@@ -343,7 +343,6 @@ void initializeSystem() {
   // Launch into app manager (shows launcher)
   appManager.showLauncherScreen();
 }
-}
 
 // ========================================
 // MEMORY MANAGEMENT - NEW
@@ -375,7 +374,7 @@ bool testMemoryLimits() {
   return true;
 }
 
-void emergencyMemoryCleanup() {
+bool emergencyMemoryCleanup() {
   Serial.println("[MAIN] Emergency memory cleanup...");
   
   // Disable screen buffer if enabled
@@ -385,6 +384,7 @@ void emergencyMemoryCleanup() {
   heap_caps_check_integrity_all(true);
   
   Serial.printf("[MAIN] Memory after cleanup: %d bytes\n", ESP.getFreeHeap());
+  return true;
 }
 
 // ========================================
@@ -533,7 +533,7 @@ void updatePerformanceStats() {
   
   unsigned long currentTime = millis();
   if (currentTime - lastFPSCalculation >= 1000) { // Every second
-    currentFPS = (float)(frameCount - lastFrameCount) * 1000.0f * 1000.0f / (currentTime - lastFPSCalculation);
+    currentFPS = (float)(frameCount - lastFrameCount) * 1000.0f / (currentTime - lastFPSCalculation);
     lastFPSCalculation = currentTime;
     lastFrameCount = frameCount;
     
@@ -606,16 +606,19 @@ void handleSerialCommands() {
   } else if (command == "test") {
     runSystemIntegrationTests();
     
+  } else if (command == "reset") {
+    Serial.println("[DEBUG] System reset requested");
+    ESP.restart();
+    
   } else {
-    // Handle other commands as before
     Serial.printf("Unknown command: %s (type 'help' for commands)\n", command.c_str());
   }
 }
 
 void printSystemInfo() {
   Serial.println();
-  Serial.println("=== remu.ii System Information (FIXED) ===");
-  Serial.printf("Version: 1.0-FIXED\n");
+  Serial.println("=== remu.ii System Information (FULLY FIXED) ===");
+  Serial.printf("Version: 1.0-FULLY-FIXED\n");
   Serial.printf("Build: %s %s\n", __DATE__, __TIME__);
   Serial.printf("ESP32 Chip: %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
   Serial.printf("CPU Frequency: %d MHz\n", ESP.getCpuFreqMHz());

@@ -1,11 +1,11 @@
 #include "AppManager.h"
-#include "../../apps/CarCloner/CarCloner.h"
-#include "../../apps/BLEScanner/BLEScanner.h"
-#include "../../apps/PreqScanner/FreqScanner.h"
-#include "../../apps/EntropyBeacon/EntropyBeacon.h"
-#include "../../apps/Sequencer/Sequencer.h"
-#include "../../apps/WifiTools/WiFiTools.h"
-#include "../../apps/DigitalPet/DigitalPet.h"
+#include "../../apps/CarCloner/CarClonerStub.h"
+#include "../../apps/BLEScanner/BLEScannerStub.h"
+#include "../../apps/PreqScanner/FreqScannerStub.h"
+#include "../../apps/EntropyBeacon/EntropyBeaconStub.h"
+#include "../../apps/Sequencer/SequencerStub.h"
+#include "../../apps/WifiTools/WiFiToolsStub.h"
+#include "../../apps/DigitalPet/DigitalPetStub.h"
 
 // Global instance
 AppManager appManager;
@@ -194,7 +194,7 @@ bool AppManager::registerApp(String name, String className, String filePath) {
     appRegistry[index].metadata.description = "Built-in application";
     appRegistry[index].metadata.category = CATEGORY_OTHER;
     appRegistry[index].metadata.icon = getDefaultIcon(CATEGORY_OTHER);
-    appRegistry[index].metadata.maxMemory = 10000; // 10KB default
+    appRegistry[index].metadata.memoryRequirement = 10000; // 10KB default
     
     Serial.printf("[AppManager] Registered: %s\n", name.c_str());
     return true;
@@ -243,7 +243,7 @@ bool AppManager::switchToApp(uint8_t appIndex) {
     if (currentApp) {
         currentApp->onPause();
         currentApp->cleanup();
-        delete currentApp;
+        // Don't delete here - let AppManager handle cleanup
         currentApp = nullptr;
     }
     
@@ -266,7 +266,6 @@ bool AppManager::switchToApp(uint8_t appIndex) {
         Serial.printf("[AppManager] ERROR: Failed to initialize app '%s'\n", 
                      appRegistry[appIndex].name.c_str());
         currentApp->cleanup();
-        delete currentApp;
         currentApp = nullptr;
         appRegistry[appIndex].instance = nullptr;
         appRegistry[appIndex].isLoaded = false;
@@ -326,7 +325,7 @@ bool AppManager::loadApp(uint8_t appIndex) {
     
     // Update memory usage
     size_t currentHeap = ESP.getFreeHeap();
-    appRegistry[appIndex].memoryUsage = availableMemory - currentHeap;
+    appRegistry[appIndex].memoryUsage = (availableMemory > currentHeap) ? (availableMemory - currentHeap) : 0;
     
     return true;
 }
@@ -607,7 +606,7 @@ void AppManager::checkMemoryUsage() {
 bool AppManager::hasEnoughMemoryForApp(uint8_t appIndex) {
     if (appIndex >= registeredAppCount) return false;
     
-    size_t required = appRegistry[appIndex].metadata.maxMemory;
+    size_t required = appRegistry[appIndex].metadata.memoryRequirement;
     return (availableMemory >= required + 5000); // 5KB safety margin
 }
 

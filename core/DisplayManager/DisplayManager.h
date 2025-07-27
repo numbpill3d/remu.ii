@@ -176,8 +176,13 @@ public:
     // Utility functions
     void drawTestPattern();
     void drawBootLogo();
+    void drawBootLogoOptimized(); // Memory-optimized version
     void drawSystemStats(int16_t x, int16_t y);
     void screenshot(); // Debug function
+    
+    // Basic drawing primitives
+    void drawPixel(int16_t x, int16_t y, uint16_t color);
+    void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color);
     
     // Direct TFT access (use carefully)
     Adafruit_ILI9341* getTFT() { return tft; }
