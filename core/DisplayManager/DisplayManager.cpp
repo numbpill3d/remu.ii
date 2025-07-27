@@ -39,19 +39,27 @@ bool DisplayManager::initialize() {
     // Set initial font
     setFont(FONT_MEDIUM);
     
-    // Display boot logo
-    drawBootLogo();
+    // Display boot logo (memory-optimized version)
+    drawBootLogoOptimized();
     
     initialized = true;
     Serial.println("[DisplayManager] Display initialized successfully");
     Serial.printf("[DisplayManager] Resolution: %dx%d\n", SCREEN_WIDTH, SCREEN_HEIGHT);
+    Serial.printf("[DisplayManager] Free heap after init: %d bytes\n", ESP.getFreeHeap());
     
     return true;
 }
 
 void DisplayManager::update() {
-    // Nothing to update continuously for now
-    // Could add screen saver, brightness adjustment, etc.
+    // Memory monitoring
+    static unsigned long lastMemCheck = 0;
+    if (millis() - lastMemCheck > 5000) { // Check every 5 seconds
+        size_t freeHeap = ESP.getFreeHeap();
+        if (freeHeap < 10000) { // Less than 10KB
+            Serial.printf("[DisplayManager] WARNING: Low memory: %d bytes\n", freeHeap);
+        }
+        lastMemCheck = millis();
+    }
 }
 
 void DisplayManager::shutdown() {
@@ -80,6 +88,7 @@ void DisplayManager::setBrightness(uint8_t level) {
     brightness = level;
     // Note: ILI9341 doesn't have built-in brightness control
     // This would require PWM on the backlight pin or external circuit
+    Serial.printf("[DisplayManager] Brightness set to %d (hardware implementation needed)\n", level);
 }
 
 void DisplayManager::setRotation(uint8_t rotation) {
@@ -127,12 +136,6 @@ void DisplayManager::drawTextCentered(int16_t x, int16_t y, int16_t w, String te
     drawText(centeredX, y, text, color);
 }
 
-void DisplayManager::drawTerminalText(int16_t x, int16_t y, String text, uint16_t color) {
-    // Terminal text with monospace appearance
-    setFont(FONT_SMALL);
-    drawText(x, y, text, color);
-}
-
 int16_t DisplayManager::getTextWidth(String text) {
     if (!initialized || !tft) return 0;
     
@@ -153,85 +156,31 @@ int16_t DisplayManager::getTextHeight() {
     }
 }
 
-void DisplayManager::drawButton(Button& button) {
-    drawButton(button.x, button.y, button.w, button.h, button.text, button.state, button.color);
-}
-
-void DisplayManager::drawButton(int16_t x, int16_t y, int16_t w, int16_t h, String text, ButtonState state, uint16_t color) {
+// Memory-optimized boot logo (no large string arrays)
+void DisplayManager::drawBootLogoOptimized() {
     if (!initialized || !tft) return;
     
-    // Draw button background
-    tft->fillRect(x, y, w, h, color);
+    clearScreen(COLOR_BLACK);
     
-    // Draw 3D border effect
-    bool inset = (state == BUTTON_PRESSED);
-    drawBorder3D(x, y, w, h, inset);
-    
-    // Draw button text
-    uint16_t textColor = COLOR_WHITE;
-    if (state == BUTTON_DISABLED) {
-        textColor = COLOR_LIGHT_GRAY;
-    } else if (state == BUTTON_HIGHLIGHTED) {
-        textColor = COLOR_RED_GLOW;
-    }
+    // Simple text-based logo instead of ASCII art
+    setFont(FONT_LARGE);
+    drawTextCentered(0, 80, SCREEN_WIDTH, "remu.ii", COLOR_RED_GLOW);
     
     setFont(FONT_MEDIUM);
-    drawTextCentered(x, y + (h - getTextHeight()) / 2, w, text, textColor);
+    drawTextCentered(0, 110, SCREEN_WIDTH, "v1.0", COLOR_GREEN_PHOS);
     
-    // Add glow effect for highlighted buttons
-    if (state == BUTTON_HIGHLIGHTED) {
-        drawGlowEffect(x, y, w, h, COLOR_RED_GLOW);
-    }
-}
-
-void DisplayManager::drawWindow(Window& window) {
-    drawWindow(window.x, window.y, window.w, window.h, window.title, window.type);
-}
-
-void DisplayManager::drawWindow(int16_t x, int16_t y, int16_t w, int16_t h, String title, WindowType type) {
-    if (!initialized || !tft) return;
+    setFont(FONT_SMALL);
+    drawTextCentered(0, 140, SCREEN_WIDTH, "ESP32 Anti-Phone", COLOR_WHITE);
+    drawTextCentered(0, 155, SCREEN_WIDTH, "Framework", COLOR_WHITE);
     
-    // Window background
-    uint16_t bgColor = COLOR_BLACK;
-    uint16_t borderColor = COLOR_DARK_GRAY;
-    
-    switch (type) {
-        case WINDOW_TERMINAL:
-            bgColor = COLOR_BLACK;
-            borderColor = COLOR_GREEN_PHOS;
-            break;
-        case WINDOW_DIALOG:
-            bgColor = COLOR_DARK_GRAY;
-            borderColor = COLOR_RED_GLOW;
-            break;
-        case WINDOW_POPUP:
-            bgColor = COLOR_MID_GRAY;
-            borderColor = COLOR_PURPLE_GLOW;
-            break;
-        default:
-            break;
+    // Simple loading animation
+    for (int i = 0; i <= 100; i += 10) {
+        drawProgressBar(50, 180, 220, 12, i, COLOR_GREEN_PHOS, COLOR_DARK_GRAY);
+        delay(100);
     }
     
-    // Fill window background
-    tft->fillRect(x, y, w, h, bgColor);
-    
-    // Draw border
-    tft->drawRect(x, y, w, h, borderColor);
-    tft->drawRect(x + 1, y + 1, w - 2, h - 2, borderColor);
-    
-    // Draw title bar if title provided
-    if (title.length() > 0) {
-        tft->fillRect(x + 2, y + 2, w - 4, TITLE_BAR_HEIGHT, COLOR_MID_GRAY);
-        drawBorder3D(x + 2, y + 2, w - 4, TITLE_BAR_HEIGHT, false);
-        
-        setFont(FONT_SMALL);
-        drawText(x + 6, y + 6, title, COLOR_WHITE);
-    }
-}
-
-void DisplayManager::drawProgressBar(ProgressBar& progressBar) {
-    drawProgressBar(progressBar.x, progressBar.y, progressBar.w, progressBar.h, 
-                   progressBar.progress, progressBar.fillColor, progressBar.bgColor);
+    delay(1000);
+    clearScreen(COLOR_BLACK);
 }
 
 void DisplayManager::drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t progress, uint16_t fillColor, uint16_t bgColor) {
@@ -247,112 +196,90 @@ void DisplayManager::drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h,
     int16_t fillWidth = (w - 4) * progress / 100;
     if (fillWidth > 0) {
         tft->fillRect(x + 2, y + 2, fillWidth, h - 4, fillColor);
-        
-        // Add glow effect to progress
-        if (fillWidth > 2) {
-            tft->drawFastHLine(x + 2, y + 2, fillWidth, COLOR_WHITE);
-        }
-    }
-    
-    // Progress text
-    setFont(FONT_SMALL);
-    String progressText = String(progress) + "%";
-    drawTextCentered(x, y + (h - 8) / 2, w, progressText, COLOR_WHITE);
-}
-
-void DisplayManager::drawBorder3D(int16_t x, int16_t y, int16_t w, int16_t h, bool inset) {
-    if (!initialized || !tft) return;
-    
-    uint16_t lightColor = inset ? COLOR_DARK_GRAY : COLOR_WHITE;
-    uint16_t darkColor = inset ? COLOR_WHITE : COLOR_DARK_GRAY;
-    
-    // Top and left edges (light)
-    tft->drawFastHLine(x, y, w - 1, lightColor);
-    tft->drawFastVLine(x, y, h - 1, lightColor);
-    
-    // Bottom and right edges (dark)
-    tft->drawFastHLine(x + 1, y + h - 1, w - 1, darkColor);
-    tft->drawFastVLine(x + w - 1, y + 1, h - 1, darkColor);
-}
-
-void DisplayManager::drawGlowEffect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    if (!initialized || !tft) return;
-    
-    // Simple glow effect - draw faded border
-    uint8_t alpha = 128;
-    for (int i = 0; i < 3; i++) {
-        tft->drawRect(x - i, y - i, w + 2 * i, h + 2 * i, color);
-        alpha /= 2;
     }
 }
 
-void DisplayManager::drawScrollbar(int16_t x, int16_t y, int16_t h, uint8_t position, uint8_t size) {
+void DisplayManager::drawButton(int16_t x, int16_t y, int16_t w, int16_t h, String text, ButtonState state, uint16_t color) {
     if (!initialized || !tft) return;
     
-    // Scrollbar background
-    tft->fillRect(x, y, SCROLL_BAR_WIDTH, h, COLOR_DARK_GRAY);
-    tft->drawRect(x, y, SCROLL_BAR_WIDTH, h, COLOR_MID_GRAY);
+    // Draw button background
+    tft->fillRect(x, y, w, h, color);
     
-    // Scrollbar thumb
-    int16_t thumbHeight = h * size / 100;
-    int16_t thumbY = y + (h - thumbHeight) * position / 100;
+    // Draw simple border
+    uint16_t borderColor = (state == BUTTON_PRESSED) ? COLOR_DARK_GRAY : COLOR_WHITE;
+    tft->drawRect(x, y, w, h, borderColor);
     
-    tft->fillRect(x + 1, thumbY, SCROLL_BAR_WIDTH - 2, thumbHeight, COLOR_MID_GRAY);
-    drawBorder3D(x + 1, thumbY, SCROLL_BAR_WIDTH - 2, thumbHeight, false);
-}
-
-void DisplayManager::drawCheckbox(int16_t x, int16_t y, bool checked, String label) {
-    if (!initialized || !tft) return;
-    
-    // Checkbox square
-    tft->fillRect(x, y, 12, 12, COLOR_WHITE);
-    tft->drawRect(x, y, 12, 12, COLOR_DARK_GRAY);
-    drawBorder3D(x, y, 12, 12, true);
-    
-    // Check mark
-    if (checked) {
-        tft->drawLine(x + 2, y + 6, x + 5, y + 9, COLOR_RED_GLOW);
-        tft->drawLine(x + 5, y + 9, x + 10, y + 3, COLOR_RED_GLOW);
+    // Draw button text
+    uint16_t textColor = COLOR_WHITE;
+    if (state == BUTTON_DISABLED) {
+        textColor = COLOR_LIGHT_GRAY;
+    } else if (state == BUTTON_HIGHLIGHTED) {
+        textColor = COLOR_RED_GLOW;
     }
     
-    // Label
-    if (label.length() > 0) {
-        setFont(FONT_MEDIUM);
-        drawText(x + 16, y - 2, label, COLOR_WHITE);
+    setFont(FONT_MEDIUM);
+    drawTextCentered(x, y + (h - getTextHeight()) / 2, w, text, textColor);
+}
+
+void DisplayManager::drawRetroRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color, bool filled) {
+    if (!initialized || !tft) return;
+    
+    if (filled) {
+        tft->fillRect(x, y, w, h, color);
+    } else {
+        tft->drawRect(x, y, w, h, color);
+    }
+}
+
+void DisplayManager::drawRetroLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) {
+    if (!initialized || !tft) return;
+    tft->drawLine(x0, y0, x1, y1, color);
+}
+
+void DisplayManager::drawRetroCircle(int16_t x, int16_t y, int16_t r, uint16_t color, bool filled) {
+    if (!initialized || !tft) return;
+    if (filled) {
+        tft->fillCircle(x, y, r, color);
+    } else {
+        tft->drawCircle(x, y, r, color);
     }
 }
 
 void DisplayManager::drawGlitch(int16_t x, int16_t y, int16_t w, int16_t h) {
     if (!initialized || !tft) return;
     
-    // Random glitch lines
+    // Simple glitch effect using random lines
     for (int i = 0; i < 5; i++) {
-        int16_t glitchY = y + systemCore.getRandomByte() % h;
-        int16_t glitchW = systemCore.getRandomByte() % w;
+        int16_t glitchY = y + (systemCore.getRandomByte() % h);
+        int16_t glitchW = systemCore.getRandomByte() % (w/2);
         uint16_t glitchColor = (systemCore.getRandomByte() % 2) ? COLOR_RED_GLOW : COLOR_PURPLE_GLOW;
         
         tft->drawFastHLine(x, glitchY, glitchW, glitchColor);
     }
 }
 
-void DisplayManager::drawScanlines(int16_t x, int16_t y, int16_t w, int16_t h) {
+void DisplayManager::drawGlowEffect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
     if (!initialized || !tft) return;
     
-    // Draw horizontal scanlines
-    for (int16_t i = y; i < y + h; i += 2) {
-        tft->drawFastHLine(x, i, w, COLOR_DARK_GRAY);
+    // Simple glow effect - draw multiple borders
+    for (int i = 0; i < 2; i++) {
+        tft->drawRect(x - i, y - i, w + 2 * i, h + 2 * i, color);
     }
 }
 
-void DisplayManager::drawNoise(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t intensity) {
-    if (!initialized || !tft) return;
+void DisplayManager::drawIcon(int16_t x, int16_t y, const uint8_t* iconData, uint16_t color) {
+    if (!initialized || !tft || !iconData) return;
     
-    for (int i = 0; i < intensity; i++) {
-        int16_t noiseX = x + systemCore.getRandomByte() % w;
-        int16_t noiseY = y + systemCore.getRandomByte() % h;
-        uint16_t noiseColor = systemCore.getRandomByte() % 2 ? COLOR_WHITE : COLOR_BLACK;
-        
-        tft->drawPixel(noiseX, noiseY, noiseColor);
+    // Draw 16x16 1-bit bitmap
+    for (int row = 0; row < 16; row++) {
+        for (int col = 0; col < 16; col++) {
+            int byteIndex = (row * 2) + (col / 8);
+            int bitIndex = 7 - (col % 8);
+            
+            if (iconData[byteIndex] & (1 << bitIndex)) {
+                tft->drawPixel(x + col, y + row, color);
+            }
+        }
     }
 }
 
@@ -361,94 +288,55 @@ void DisplayManager::drawASCIIBorder(int16_t x, int16_t y, int16_t w, int16_t h,
     
     setFont(FONT_SMALL);
     
-    // Top border
+    // Simplified ASCII border
     drawText(x, y, "+", color);
-    for (int i = 1; i < w / 6 - 1; i++) {
-        drawText(x + i * 6, y, "-", color);
-    }
     drawText(x + w - 6, y, "+", color);
-    
-    // Bottom border
     drawText(x, y + h - 8, "+", color);
-    for (int i = 1; i < w / 6 - 1; i++) {
-        drawText(x + i * 6, y + h - 8, "-", color);
-    }
     drawText(x + w - 6, y + h - 8, "+", color);
     
-    // Side borders
-    for (int i = 1; i < h / 8 - 1; i++) {
-        drawText(x, y + i * 8, "|", color);
-        drawText(x + w - 6, y + i * 8, "|", color);
+    // Draw horizontal lines
+    for (int i = 6; i < w - 6; i += 6) {
+        drawText(x + i, y, "-", color);
+        drawText(x + i, y + h - 8, "-", color);
+    }
+    
+    // Draw vertical lines
+    for (int i = 8; i < h - 8; i += 8) {
+        drawText(x, y + i, "|", color);
+        drawText(x + w - 6, y + i, "|", color);
     }
 }
 
-void DisplayManager::drawBootLogo() {
-    if (!initialized || !tft) return;
-    
-    clearScreen(COLOR_BLACK);
-    
-    // ASCII art logo
-    setFont(FONT_MEDIUM);
-    
-    String logo[] = {
-        "  ┌─────────────────┐",
-        "  │   remu.ii v1.0  │",
-        "  │                 │", 
-        "  │  ░░░░░░░░░░░░░  │",
-        "  │  ░ ANTI-PHONE ░  │",
-        "  │  ░  FRAMEWORK ░  │",
-        "  │  ░░░░░░░░░░░░░  │",
-        "  │                 │",
-        "  │ Loading system.. │",
-        "  └─────────────────┘"
-    };
-    
-    int16_t startY = 60;
-    for (int i = 0; i < 10; i++) {
-        drawText(20, startY + i * 16, logo[i], COLOR_GREEN_PHOS);
-        delay(100); // Animated loading effect
-    }
-    
-    // Loading bar
-    for (int i = 0; i <= 100; i += 5) {
-        drawProgressBar(50, 220, 220, 16, i, COLOR_RED_GLOW, COLOR_DARK_GRAY);
-        delay(50);
-    }
-    
-    delay(1000);
-    clearScreen(COLOR_BLACK);
-}
-
-void DisplayManager::drawTestPattern() {
-    if (!initialized || !tft) return;
-    
-    clearScreen(COLOR_BLACK);
-    
-    // Color bars
-    int16_t barHeight = SCREEN_HEIGHT / 6;
-    uint16_t colors[] = {COLOR_WHITE, COLOR_RED_GLOW, COLOR_PURPLE_GLOW, 
-                        COLOR_GREEN_PHOS, COLOR_BLUE_CYBER, COLOR_DARK_GRAY};
-    
-    for (int i = 0; i < 6; i++) {
-        tft->fillRect(0, i * barHeight, SCREEN_WIDTH, barHeight, colors[i]);
-    }
-    
-    // Test text
-    setFont(FONT_LARGE);
-    drawTextCentered(0, SCREEN_HEIGHT / 2 - 12, SCREEN_WIDTH, "TEST PATTERN", COLOR_BLACK);
-}
-
+// Memory-safe buffer management
 void DisplayManager::enableBuffer(bool enable) {
     if (enable && !screenBuffer) {
-        screenBuffer = (uint16_t*)malloc(SCREEN_WIDTH * SCREEN_HEIGHT * 2);
+        // Only allocate a small line buffer instead of full screen
+        const size_t lineBufferSize = SCREEN_WIDTH * 2; // One line of 16-bit pixels
+        screenBuffer = (uint16_t*)malloc(lineBufferSize);
         if (screenBuffer) {
             bufferEnabled = true;
-            Serial.println("[DisplayManager] Screen buffer enabled");
+            Serial.printf("[DisplayManager] Line buffer enabled (%d bytes)\n", lineBufferSize);
+        } else {
+            Serial.println("[DisplayManager] ERROR: Failed to allocate line buffer");
         }
     } else if (!enable && screenBuffer) {
         free(screenBuffer);
         screenBuffer = nullptr;
         bufferEnabled = false;
-        Serial.println("[DisplayManager] Screen buffer disabled");
+        Serial.println("[DisplayManager] Line buffer disabled");
     }
+}
+
+void DisplayManager::drawPixel(int16_t x, int16_t y, uint16_t color) {
+    if (!initialized || !tft) return;
+    tft->drawPixel(x, y, color);
+}
+
+void DisplayManager::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) {
+    if (!initialized || !tft) return;
+    tft->drawLine(x0, y0, x1, y1, color);
+}
+
+Adafruit_ILI9341* DisplayManager::getTFT() {
+    return tft;
 }
