@@ -104,7 +104,7 @@ void runSystemIntegrationTests();
 bool testMemoryLimits();
 bool validateHardwareConnections();
 void runTouchCalibration();
-void emergencyMemoryCleanup();
+bool emergencyMemoryCleanup();
 
 // ========================================
 // ARDUINO SETUP
@@ -521,7 +521,7 @@ void updatePerformanceStats() {
   
   unsigned long currentTime = millis();
   if (currentTime - lastFPSCalculation >= 1000) { // Every second
-    currentFPS = (float)(frameCount - lastFrameCount) * 1000.0f / (currentTime - lastFPSCalculation);
+    currentFPS = (float)(frameCount - lastFrameCount) * 1000.0f * 1000.0f / (currentTime - lastFPSCalculation);
     lastFPSCalculation = currentTime;
     lastFrameCount = frameCount;
     
