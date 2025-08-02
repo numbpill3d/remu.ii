@@ -642,10 +642,9 @@ const uint8_t* AppManager::getDefaultIcon(AppCategory category) {
         case CATEGORY_SYSTEM: return ICON_SYSTEM;
         case CATEGORY_TOOLS: return ICON_TOOLS;
         case CATEGORY_GAMES: return ICON_GAMES;
-        case CATEGORY_MEDIA: return ICON_MEDIA;
-        case CATEGORY_COMMUNICATION: return ICON_COMM;
-        case CATEGORY_OTHER: return ICON_OTHER;
-        default: return ICON_OTHER;
+        case CATEGORY_MEDIA: return ICON_SYSTEM; // Reuse system icon
+        case CATEGORY_COMM: return ICON_SYSTEM; // Reuse system icon
+        default: return ICON_SYSTEM;
     }
 }
 
