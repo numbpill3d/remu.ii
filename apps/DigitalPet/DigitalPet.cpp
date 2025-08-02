@@ -253,6 +253,7 @@ void DigitalPetApp::drawPet() {
         case RESTLESS: sprite = PET_SPRITE_HAPPY; break;
         case OBSESSED: sprite = PET_SPRITE_EATING; break;
         case GLITCHED: sprite = PET_SPRITE_SICK; break;
+        default: sprite = PET_SPRITE_IDLE; break;
     }
     
     // Draw sprite with corruption effects
@@ -291,6 +292,10 @@ void DigitalPetApp::drawMoodIndicator() {
         case GLITCHED: 
             moodText = "GLITCHED"; 
             moodColor = COLOR_PURPLE_GLOW; 
+            break;
+        default: 
+            moodText = "Unknown"; 
+            moodColor = COLOR_WHITE; 
             break;
     }
     
@@ -341,6 +346,7 @@ void DigitalPetApp::drawStatsDisplay() {
         case ORACLE: archetypeText = "Oracle"; break;
         case PARASITE: archetypeText = "Parasite"; break;
         case MIRROR: archetypeText = "Mirror"; break;
+        default: archetypeText = "Unknown"; break;
     }
     displayManager.drawText(20, y, "Type: " + archetypeText, COLOR_WHITE);
 }

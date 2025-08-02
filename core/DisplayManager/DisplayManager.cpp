@@ -430,7 +430,7 @@ void DisplayManager::drawNoise(int16_t x, int16_t y, int16_t w, int16_t h, uint8
     for (int i = 0; i < intensity; i++) {
         int16_t noiseX = x + (systemCore.getRandomByte() % w);
         int16_t noiseY = y + (systemCore.getRandomByte() % h);
-        uint16_t noiseColor = systemCore.getRandomByte() > 128 ? COLOR_WHITE : COLOR_BLACK;
+        uint16_t noiseColor = (systemCore.getRandomByte() > 128) ? COLOR_WHITE : COLOR_BLACK;
         tft->drawPixel(noiseX, noiseY, noiseColor);
     }
 }
