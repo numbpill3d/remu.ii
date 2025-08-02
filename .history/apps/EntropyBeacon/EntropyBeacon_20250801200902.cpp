@@ -1,22 +1,5 @@
 #include "EntropyBeacon.h"
-#include "../../core/SystemCore/SystemCore.h"
 #include <math.h>
-
-// Pin definitions for entropy sources
-#define ENTROPY_PIN_1 A0
-#define ENTROPY_PIN_2 A1
-#define ENTROPY_PIN_3 A2
-#define DAC_OUT_LEFT 25   // ESP32 DAC1
-#define DAC_OUT_RIGHT 26  // ESP32 DAC2
-
-// Math constants
-#ifndef PI
-#define PI 3.14159265359f
-#endif
-
-#ifndef FLT_MAX
-#define FLT_MAX 3.402823466e+38F
-#endif
 
 // ========================================
 // ICON DATA AND CONSTANTS
@@ -41,9 +24,16 @@ EntropyBeaconApp::EntropyBeaconApp() :
     dacPin(25), // ESP32 DAC1
     selectedZone(-1)
 {
-    // Set app metadata using BaseApp methods
-    setMetadata("EntropyBeacon", "1.0", "remu.ii", "Real-time entropy visualization", CATEGORY_TOOLS, 30000);
-    setRequirements(true, false, false); // Requires SD card
+    // Set app metadata
+    metadata.name = "EntropyBeacon";
+    metadata.version = "1.0";
+    metadata.author = "remu.ii";
+    metadata.description = "Real-time entropy visualization";
+    metadata.category = CATEGORY_TOOLS;
+    metadata.maxMemory = 30000; // 30KB for buffers
+    metadata.requiresSD = true;
+    metadata.requiresWiFi = false;
+    metadata.requiresBLE = false;
     
     // Set colors
     backgroundColor = COLOR_BLACK;
@@ -94,10 +84,11 @@ EntropyBeaconApp::~EntropyBeaconApp() {
 bool EntropyBeaconApp::initialize() {
     debugLog("EntropyBeacon initializing...");
     
-    // Create app data directory if filesystem available
-    String appDir = "/apps/entropybeacon";
-    if (SD.exists("/apps") || SD.mkdir("/apps")) {
-        SD.mkdir(appDir.c_str());
+    setState(APP_INITIALIZING);
+    
+    // Create app data directory
+    if (!createAppDataDir()) {
+        debugLog("WARNING: Could not create app data directory");
     }
     
     // Initialize DAC
@@ -118,8 +109,9 @@ bool EntropyBeaconApp::initialize() {
     calculateSampleInterval();
     
     // Initialize recording path
-    recordingPath = "/apps/entropybeacon/entropy_data.csv";
+    recordingPath = getAppDataPath() + "/entropy_data.csv";
     
+    setState(APP_RUNNING);
     debugLog("EntropyBeacon initialized successfully");
     
     return true;
@@ -161,52 +153,145 @@ void EntropyBeaconApp::update() {
 
 void EntropyBeaconApp::checkMemoryUsage() {
     // Monitor memory usage and optimize if necessary
-    size_t currentMemory = ESP.getFreeHeap();
+    size_t currentMemory = getMemoryUsage();
+    size_t memoryLimit = metadata.maxMemory;
     
-    if (currentMemory < 10000) { // Less than 10KB free
-        debugLog("WARNING: Low memory: " + String(currentMemory) + " bytes free");
+    if (currentMemory > memoryLimit * 0.9f) { // 90% of limit
+        logSystemEvent("WARN", "High Memory Usage",
+                      "Using " + String(currentMemory) + "/" + String(memoryLimit) + " bytes");
+        
+        // Perform memory optimization
         optimizeMemoryUsage();
+    }
+    
+    // Check for memory leaks by comparing with initial heap
+    if (currentMemory > initialHeap * 1.5f) { // 50% increase from start
+        logSystemEvent("ERROR", "Potential Memory Leak",
+                      "Memory usage increased significantly from startup");
     }
 }
 
 void EntropyBeaconApp::optimizeMemoryUsage() {
-    // Clear older waterfall data
-    memset(waterfallData, 0, sizeof(waterfallData) / 2);
+    // Implement memory optimization strategies
     
-    // Compress histogram data
-    for (uint16_t i = 0; i < 128; i++) {
-        histogramBins[i] = (histogramBins[i*2] + histogramBins[i*2+1]) / 2;
-        histogramBins[i+128] = 0;
+    // 1. Reduce buffer sizes if necessary
+    if (getMemoryUsage() > metadata.maxMemory * 0.95f) {
+        // Clear older waterfall data
+        memset(waterfallData, 0, sizeof(waterfallData) / 2);
+        logSystemEvent("INFO", "Memory Optimization", "Cleared waterfall history");
     }
     
-    debugLog("Memory optimization performed");
+    // 2. Reduce histogram precision if needed
+    if (getMemoryUsage() > metadata.maxMemory * 0.92f) {
+        // Compress histogram data
+        for (uint16_t i = 0; i < 128; i++) {
+            histogramBins[i] = (histogramBins[i*2] + histogramBins[i*2+1]) / 2;
+            histogramBins[i+128] = 0;
+        }
+        logSystemEvent("INFO", "Memory Optimization", "Compressed histogram data");
+    }
+    
+    // 3. Force garbage collection equivalent operations
+    ESP.getHeapSize(); // This call can trigger cleanup on ESP32
 }
 
 void EntropyBeaconApp::optimizePerformance() {
-    // Simple performance optimization
-    static unsigned long lastOptimize = 0;
-    if (millis() - lastOptimize < 5000) return;
+    // Performance optimization for real-time operation
     
-    // Reduce sample rate if needed
-    if (viz.sampleRate > RATE_1KHZ) {
-        viz.sampleRate = (SampleRate)(viz.sampleRate / 2);
-        calculateSampleInterval();
-        debugLog("Reduced sample rate for performance");
+    // Adjust sample rate based on system performance
+    float currentFPS = getFPS();
+    if (currentFPS < 10.0f) { // If FPS drops below 10
+        // Reduce computational load
+        if (viz.sampleRate > RATE_1KHZ) {
+            SampleRate oldRate = viz.sampleRate;
+            viz.sampleRate = (SampleRate)(viz.sampleRate / 2);
+            calculateSampleInterval();
+            
+            logConfigurationChange("sample_rate", String(oldRate), String(viz.sampleRate));
+            logSystemEvent("WARN", "Performance Optimization",
+                          "Reduced sample rate due to low FPS: " + String(currentFPS, 1));
+        }
+        
+        // Reduce FFT calculations
+        if (viz.mode == VIZ_SPECTRUM || viz.mode == VIZ_WATERFALL) {
+            viz.spectrumBars = min(16, viz.spectrumBars); // Reduce spectrum resolution
+        }
     }
     
-    lastOptimize = millis();
+    // Optimize visualization updates based on mode
+    static uint8_t updateCounter = 0;
+    updateCounter++;
+    
+    switch (viz.mode) {
+        case VIZ_WATERFALL:
+            // Update waterfall every 4 frames to reduce load
+            if (updateCounter % 4 != 0) return;
+            break;
+            
+        case VIZ_SPECTRUM:
+            // Update spectrum every 2 frames
+            if (updateCounter % 2 != 0) return;
+            break;
+            
+        default:
+            // Other modes update every frame
+            break;
+    }
 }
 
 void EntropyBeaconApp::benchmarkPerformance() {
+    // Comprehensive performance benchmark
+    logSystemEvent("INFO", "Performance Benchmark", "Starting benchmark suite");
+    
     unsigned long startTime = micros();
     
-    // Simple benchmark
-    for (int i = 0; i < 100; i++) {
-        generateChaoticCombined();
+    // Benchmark entropy generation
+    uint32_t entropyBenchmark = 0;
+    for (int i = 0; i < 1000; i++) {
+        entropyBenchmark += generateChaoticCombined();
     }
+    unsigned long entropyTime = micros() - startTime;
     
-    unsigned long totalTime = micros() - startTime;
-    debugLog("Benchmark: " + String(totalTime) + "μs for 100 entropy generations");
+    // Benchmark mathematical analysis
+    startTime = micros();
+    uint16_t testData[100];
+    for (int i = 0; i < 100; i++) {
+        testData[i] = random(4096);
+    }
+    float shannonResult = calculateShannonEntropy(testData, 100);
+    float complexityResult = estimateKolmogorovComplexity(testData, 100);
+    unsigned long analysisTime = micros() - startTime;
+    
+    // Benchmark anomaly detection
+    startTime = micros();
+    for (int i = 0; i < 100; i++) {
+        float testValue = random(1000) / 1000.0f;
+        bool anomalyResult = isAnomaly(testValue);
+        updateAnomalyStats(testValue);
+    }
+    unsigned long anomalyTime = micros() - startTime;
+    
+    // Benchmark visualization (simulate)
+    startTime = micros();
+    performFFT();
+    updateAdvancedAnalysis();
+    unsigned long vizTime = micros() - startTime;
+    
+    // Log benchmark results
+    String benchmarkReport = "Entropy: " + String(entropyTime) + "μs, " +
+                           "Analysis: " + String(analysisTime) + "μs, " +
+                           "Anomaly: " + String(anomalyTime) + "μs, " +
+                           "Viz: " + String(vizTime) + "μs";
+    
+    logSystemEvent("INFO", "Benchmark Results", benchmarkReport);
+    
+    // Performance recommendations
+    if (entropyTime > 5000) {
+        logSystemEvent("WARN", "Performance Issue", "Entropy generation slow");
+    }
+    if (analysisTime > 10000) {
+        logSystemEvent("WARN", "Performance Issue", "Mathematical analysis slow");
+    }
 }
 
 void EntropyBeaconApp::render() {
@@ -244,12 +329,16 @@ void EntropyBeaconApp::render() {
     drawControls();
     drawStatusBar();
     
-    // Draw frame counter for debugging
-    displayManager.setFont(FONT_SMALL);
-    displayManager.drawText(270, 5, "F:" + String(frameCount % 1000), COLOR_LIGHT_GRAY);
+    // Draw common UI elements
+    drawCommonUI();
 }
 
 bool EntropyBeaconApp::handleTouch(TouchPoint touch) {
+    // Handle common UI first
+    if (handleCommonTouch(touch)) {
+        return true;
+    }
+    
     if (!touch.isNewPress) return false;
     
     // Handle control touches
@@ -261,7 +350,7 @@ bool EntropyBeaconApp::handleTouch(TouchPoint touch) {
 void EntropyBeaconApp::cleanup() {
     // Stop recording if active
     if (viz.recordingEnabled) {
-        stopDataRecording();
+        stopRecording();
     }
     
     // Turn off DAC
