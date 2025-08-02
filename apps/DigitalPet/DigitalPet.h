@@ -236,7 +236,7 @@ public:
     void onResume() override;
     bool saveState() override;
     bool loadState() override;
-    bool handleMessage(AppMessage message, void* data = nullptr) override;
+    bool handleMessage(int messageType, void* data = nullptr) override;
     
     // Settings menu support
     uint8_t getSettingsCount() const override { return 4; }

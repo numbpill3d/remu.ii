@@ -465,3 +465,143 @@ void DisplayManager::copyToBuffer() {
 void DisplayManager::copyFromBuffer() {
     // Not implemented - would require full screen buffer
 }
+
+void DisplayManager::drawBootLogo() {
+    drawBootLogoOptimized(); // Use optimized version
+}
+
+void DisplayManager::drawTestPattern() {
+    if (!initialized || !tft) return;
+    
+    clearScreen(COLOR_BLACK);
+    
+    // Draw color bars
+    int barWidth = SCREEN_WIDTH / 8;
+    uint16_t colors[] = {COLOR_RED_GLOW, COLOR_GREEN_PHOS, COLOR_BLUE_CYBER, 
+                        COLOR_YELLOW, COLOR_PURPLE_GLOW, COLOR_WHITE, 
+                        COLOR_LIGHT_GRAY, COLOR_DARK_GRAY};
+    
+    for (int i = 0; i < 8; i++) {
+        tft->fillRect(i * barWidth, 0, barWidth, SCREEN_HEIGHT/2, colors[i]);
+    }
+    
+    // Draw grid pattern
+    for (int x = 0; x < SCREEN_WIDTH; x += 20) {
+        tft->drawFastVLine(x, SCREEN_HEIGHT/2, SCREEN_HEIGHT/2, COLOR_WHITE);
+    }
+    for (int y = SCREEN_HEIGHT/2; y < SCREEN_HEIGHT; y += 20) {
+        tft->drawFastHLine(0, y, SCREEN_WIDTH, COLOR_WHITE);
+    }
+}
+
+void DisplayManager::screenshot() {
+    Serial.println("[DisplayManager] Screenshot function not implemented");
+}
+
+void DisplayManager::drawScrollbar(int16_t x, int16_t y, int16_t h, uint8_t position, uint8_t size) {
+    if (!initialized || !tft) return;
+    
+    // Draw scrollbar track
+    tft->fillRect(x, y, SCROLL_BAR_WIDTH, h, COLOR_DARK_GRAY);
+    
+    // Draw scrollbar thumb
+    int16_t thumbHeight = (h * size) / 100;
+    int16_t thumbY = y + ((h - thumbHeight) * position) / 100;
+    tft->fillRect(x + 1, thumbY, SCROLL_BAR_WIDTH - 2, thumbHeight, COLOR_LIGHT_GRAY);
+}
+
+void DisplayManager::drawCheckbox(int16_t x, int16_t y, bool checked, String label) {
+    if (!initialized || !tft) return;
+    
+    // Draw checkbox
+    tft->drawRect(x, y, 12, 12, COLOR_WHITE);
+    if (checked) {
+        tft->fillRect(x + 2, y + 2, 8, 8, COLOR_GREEN_PHOS);
+    }
+    
+    // Draw label
+    if (label.length() > 0) {
+        setFont(FONT_SMALL);
+        drawText(x + 16, y + 2, label, COLOR_WHITE);
+    }
+}
+
+void DisplayManager::drawRadioButton(int16_t x, int16_t y, bool selected, String label) {
+    if (!initialized || !tft) return;
+    
+    // Draw radio button circle
+    tft->drawCircle(x + 6, y + 6, 6, COLOR_WHITE);
+    if (selected) {
+        tft->fillCircle(x + 6, y + 6, 3, COLOR_GREEN_PHOS);
+    }
+    
+    // Draw label
+    if (label.length() > 0) {
+        setFont(FONT_SMALL);
+        drawText(x + 16, y + 2, label, COLOR_WHITE);
+    }
+}
+
+void DisplayManager::drawSlider(int16_t x, int16_t y, int16_t w, uint8_t value, uint8_t min, uint8_t max) {
+    if (!initialized || !tft) return;
+    
+    // Draw slider track
+    tft->drawFastHLine(x, y + 4, w, COLOR_DARK_GRAY);
+    tft->drawFastHLine(x, y + 5, w, COLOR_DARK_GRAY);
+    
+    // Draw slider thumb
+    int16_t thumbX = x + ((w - 8) * (value - min)) / (max - min);
+    tft->fillRect(thumbX, y, 8, 8, COLOR_GREEN_PHOS);
+    tft->drawRect(thumbX, y, 8, 8, COLOR_WHITE);
+}
+
+void DisplayManager::drawSprite(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t* spriteData) {
+    if (!initialized || !tft || !spriteData) return;
+    
+    for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+            uint16_t color = spriteData[row * w + col];
+            if (color != 0) { // Assume 0 is transparent
+                tft->drawPixel(x + col, y + row, color);
+            }
+        }
+    }
+}
+
+void DisplayManager::drawMatrixRain(int16_t x, int16_t y, int16_t w, int16_t h) {
+    if (!initialized || !tft) return;
+    
+    // Simple matrix rain effect
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate < 100) return;
+    
+    for (int i = 0; i < 10; i++) {
+        int16_t rainX = x + (systemCore.getRandomByte() % w);
+        int16_t rainY = y + (systemCore.getRandomByte() % h);
+        char rainChar = '0' + (systemCore.getRandomByte() % 10);
+        
+        setFont(FONT_SMALL);
+        drawText(rainX, rainY, String(rainChar), COLOR_GREEN_PHOS);
+    }
+    
+    lastUpdate = millis();
+}
+
+void DisplayManager::drawHexDump(int16_t x, int16_t y, const uint8_t* data, size_t length, size_t offset) {
+    if (!initialized || !tft || !data) return;
+    
+    setFont(FONT_SMALL);
+    
+    for (size_t i = 0; i < min(length, (size_t)8); i++) {
+        String hexLine = String(offset + i, HEX) + ": ";
+        
+        // Hex bytes
+        for (size_t j = 0; j < min((size_t)8, length - i * 8); j++) {
+            if (i * 8 + j < length) {
+                hexLine += String(data[i * 8 + j], HEX) + " ";
+            }
+        }
+        
+        drawText(x, y + i * 10, hexLine, COLOR_GREEN_PHOS);
+    }
+}
