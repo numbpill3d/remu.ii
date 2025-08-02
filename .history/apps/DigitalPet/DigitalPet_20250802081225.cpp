@@ -1903,3 +1903,4 @@ void DigitalPetApp::createAppDataDir() {
 void DigitalPetApp::debugLog(String message) {
     Serial.println("[DigitalPet] " + message);
 }
+

@@ -269,6 +269,17 @@ void DigitalPetApp::drawPet() {
     }
 }
 
+void DigitalPetApp::drawCorruptedSprite(int16_t x, int16_t y) {
+    // Draw normal sprite with corruption artifacts
+    displayManager.drawIcon(x, y, PET_SPRITE_SICK, COLOR_RED_GLOW);
+    
+    // Add static noise
+    for (int i = 0; i < 5; i++) {
+        int16_t noiseX = x + (systemCore.getRandomByte() % 16);
+        int16_t noiseY = y + (systemCore.getRandomByte() % 16);
+        displayManager.drawPixel(noiseX, noiseY, COLOR_WHITE);
+    }
+}
 
 void DigitalPetApp::drawMoodIndicator() {
     displayManager.setFont(FONT_SMALL);
@@ -370,6 +381,24 @@ void DigitalPetApp::drawCorruptionOverlay() {
     }
 }
 
+void DigitalPetApp::interactWithPet() {
+    recordAction("pet", 1.0f);
+    pet.totalInteractions++;
+    
+    // Pet response based on mood and corruption
+    if (isCorrupted()) {
+        // Corrupted responses
+        increaseCorruption(0.1f);
+    } else {
+        decreaseCorruption(0.05f);
+    }
+}
+
+void DigitalPetApp::feedPet() {
+    recordAction("feed", 1.2f);
+    pet.totalInteractions++;
+    decreaseCorruption(0.1f);
+}
 
 void DigitalPetApp::updateMood() {
     float entropy = getCurrentEntropy();
@@ -407,6 +436,12 @@ void DigitalPetApp::recordAction(String action, float intensity) {
     debugLog("Recorded memory: " + action + " (intensity: " + String(intensity) + ")");
 }
 
+void DigitalPetApp::updateCorruption() {
+    // Slow corruption increase over time
+    if (millis() - pet.lastUpdate > 30000) { // 30 seconds without interaction
+        increaseCorruption(0.01f);
+    }
+}
 
 void DigitalPetApp::updateMemoryBuffer() {
     // Clean up old memories (older than 1 hour)
@@ -1882,24 +1917,3 @@ void DigitalPetApp::drawEntropyVisualization() {
     displayManager.drawText(140, 10, String(int(entropy * 100)) + "%", COLOR_WHITE);
 }
 
-// ========================================
-// UTILITY METHODS
-// ========================================
-
-void DigitalPetApp::cleanup() {
-    // Save pet data before cleanup
-    savePetData();
-}
-
-void DigitalPetApp::createAppDataDir() {
-    if (!SD.exists("/apps")) {
-        SD.mkdir("/apps");
-    }
-    if (!SD.exists("/apps/digitalpet")) {
-        SD.mkdir("/apps/digitalpet");
-    }
-}
-
-void DigitalPetApp::debugLog(String message) {
-    Serial.println("[DigitalPet] " + message);
-}

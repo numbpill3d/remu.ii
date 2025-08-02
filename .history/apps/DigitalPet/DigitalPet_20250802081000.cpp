@@ -1,25 +1,6 @@
 #include "DigitalPet.h"
 #include "../../core/SystemCore/SystemCore.h"
 
-// Animation frame definitions
-DigitalPetApp::AnimationFrame DigitalPetApp::idleAnimation[3] = {
-    {DigitalPetApp::PET_SPRITE_IDLE, 1000},
-    {DigitalPetApp::PET_SPRITE_IDLE, 1000},
-    {DigitalPetApp::PET_SPRITE_IDLE, 1000}
-};
-
-DigitalPetApp::AnimationFrame DigitalPetApp::happyAnimation[3] = {
-    {DigitalPetApp::PET_SPRITE_HAPPY, 500},
-    {DigitalPetApp::PET_SPRITE_IDLE, 500},
-    {DigitalPetApp::PET_SPRITE_HAPPY, 500}
-};
-
-DigitalPetApp::AnimationFrame DigitalPetApp::sadAnimation[3] = {
-    {DigitalPetApp::PET_SPRITE_SAD, 800},
-    {DigitalPetApp::PET_SPRITE_IDLE, 400},
-    {DigitalPetApp::PET_SPRITE_SAD, 800}
-};
-
 // Sprite data (16x16 bitmaps) - Cyberpunk pet aesthetics
 const uint8_t DigitalPetApp::PET_SPRITE_IDLE[32] = {
     0x01, 0x80, 0x03, 0xC0, 0x07, 0xE0, 0x0F, 0xF0, 0x1F, 0xF8, 0x3F, 0xFC,
@@ -88,15 +69,6 @@ DigitalPetApp::DigitalPetApp() {
     currentRoomTheme = THEME_LOVING;
     frameCount = 0;
     activeTouchZone = -1;
-    
-    // Initialize animation system
-    currentAnimation = idleAnimation;
-    animationFrameCount = 3;
-    animationLoop = true;
-    
-    // Initialize file paths
-    saveFilePath = "/apps/digitalpet/pet_data.json";
-    petTypeFilePath = "/apps/digitalpet/pet_type.txt";
     
     // Initialize touch zones
     setupTouchZones();
@@ -269,6 +241,17 @@ void DigitalPetApp::drawPet() {
     }
 }
 
+void DigitalPetApp::drawCorruptedSprite(int16_t x, int16_t y) {
+    // Draw normal sprite with corruption artifacts
+    displayManager.drawIcon(x, y, PET_SPRITE_SICK, COLOR_RED_GLOW);
+    
+    // Add static noise
+    for (int i = 0; i < 5; i++) {
+        int16_t noiseX = x + (systemCore.getRandomByte() % 16);
+        int16_t noiseY = y + (systemCore.getRandomByte() % 16);
+        displayManager.drawPixel(noiseX, noiseY, COLOR_WHITE);
+    }
+}
 
 void DigitalPetApp::drawMoodIndicator() {
     displayManager.setFont(FONT_SMALL);
@@ -370,6 +353,24 @@ void DigitalPetApp::drawCorruptionOverlay() {
     }
 }
 
+void DigitalPetApp::interactWithPet() {
+    recordAction("pet", 1.0f);
+    pet.totalInteractions++;
+    
+    // Pet response based on mood and corruption
+    if (isCorrupted()) {
+        // Corrupted responses
+        increaseCorruption(0.1f);
+    } else {
+        decreaseCorruption(0.05f);
+    }
+}
+
+void DigitalPetApp::feedPet() {
+    recordAction("feed", 1.2f);
+    pet.totalInteractions++;
+    decreaseCorruption(0.1f);
+}
 
 void DigitalPetApp::updateMood() {
     float entropy = getCurrentEntropy();
@@ -407,6 +408,12 @@ void DigitalPetApp::recordAction(String action, float intensity) {
     debugLog("Recorded memory: " + action + " (intensity: " + String(intensity) + ")");
 }
 
+void DigitalPetApp::updateCorruption() {
+    // Slow corruption increase over time
+    if (millis() - pet.lastUpdate > 30000) { // 30 seconds without interaction
+        increaseCorruption(0.01f);
+    }
+}
 
 void DigitalPetApp::updateMemoryBuffer() {
     // Clean up old memories (older than 1 hour)
@@ -1880,26 +1887,4 @@ void DigitalPetApp::drawEntropyVisualization() {
     displayManager.drawRetroRect(70, 10, 62, 8, COLOR_DARK_GRAY, false);
     displayManager.drawRetroRect(71, 11, barWidth, 6, COLOR_RED_GLOW, true);
     displayManager.drawText(140, 10, String(int(entropy * 100)) + "%", COLOR_WHITE);
-}
-
-// ========================================
-// UTILITY METHODS
-// ========================================
-
-void DigitalPetApp::cleanup() {
-    // Save pet data before cleanup
-    savePetData();
-}
-
-void DigitalPetApp::createAppDataDir() {
-    if (!SD.exists("/apps")) {
-        SD.mkdir("/apps");
-    }
-    if (!SD.exists("/apps/digitalpet")) {
-        SD.mkdir("/apps/digitalpet");
-    }
-}
-
-void DigitalPetApp::debugLog(String message) {
-    Serial.println("[DigitalPet] " + message);
 }
