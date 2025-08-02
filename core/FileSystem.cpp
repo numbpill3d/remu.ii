@@ -469,3 +469,212 @@ bool FileSystem::writeBinaryFile(const String& path, const uint8_t* data, size_t
         return false;
     }
 }
+
+bool FileSystem::appendBinaryFile(const String& path, const uint8_t* data, size_t size) {
+    if (!isReady() || !data) {
+        setError(FS_ERROR_INVALID_PARAMETER, "Invalid parameters");
+        return false;
+    }
+    
+    String cleanPath = sanitizePath(path);
+    File file = SD.open(cleanPath, FILE_APPEND);
+    
+    if (!file) {
+        setError(FS_ERROR_OPERATION_FAILED, "Failed to open file for appending");
+        return false;
+    }
+    
+    size_t bytesWritten = file.write(data, size);
+    file.close();
+    
+    if (bytesWritten == size) {
+        clearError();
+        return true;
+    } else {
+        setError(FS_ERROR_OPERATION_FAILED, "Failed to append binary data");
+        return false;
+    }
+}
+
+bool FileSystem::renameFile(const String& oldPath, const String& newPath) {
+    if (!isReady()) {
+        setError(FS_ERROR_SD_NOT_INITIALIZED, "SD card not ready");
+        return false;
+    }
+    
+    String cleanOldPath = sanitizePath(oldPath);
+    String cleanNewPath = sanitizePath(newPath);
+    
+    if (SD.rename(cleanOldPath, cleanNewPath)) {
+        clearError();
+        return true;
+    } else {
+        setError(FS_ERROR_OPERATION_FAILED, "Failed to rename file");
+        return false;
+    }
+}
+
+bool FileSystem::copyFile(const String& sourcePath, const String& destPath) {
+    if (!isReady()) {
+        setError(FS_ERROR_SD_NOT_INITIALIZED, "SD card not ready");
+        return false;
+    }
+    
+    String cleanSource = sanitizePath(sourcePath);
+    String cleanDest = sanitizePath(destPath);
+    
+    File sourceFile = SD.open(cleanSource, FILE_READ);
+    if (!sourceFile) {
+        setError(FS_ERROR_FILE_NOT_FOUND, "Source file not found");
+        return false;
+    }
+    
+    File destFile = SD.open(cleanDest, FILE_WRITE);
+    if (!destFile) {
+        sourceFile.close();
+        setError(FS_ERROR_OPERATION_FAILED, "Failed to create destination file");
+        return false;
+    }
+    
+    // Copy data in chunks
+    uint8_t buffer[512];
+    while (sourceFile.available()) {
+        size_t bytesRead = sourceFile.readBytes((char*)buffer, sizeof(buffer));
+        destFile.write(buffer, bytesRead);
+    }
+    
+    sourceFile.close();
+    destFile.close();
+    clearError();
+    return true;
+}
+
+std::vector<FileInfo> FileSystem::listFilesDetailed(const String& directory) {
+    std::vector<FileInfo> files;
+    
+    if (!isReady()) {
+        setError(FS_ERROR_SD_NOT_INITIALIZED, "SD card not ready");
+        return files;
+    }
+    
+    String cleanPath = sanitizePath(directory);
+    File dir = SD.open(cleanPath);
+    
+    if (!dir || !dir.isDirectory()) {
+        setError(FS_ERROR_DIRECTORY_NOT_FOUND, "Directory not found");
+        if (dir) dir.close();
+        return files;
+    }
+    
+    File file = dir.openNextFile();
+    while (file) {
+        FileInfo info;
+        info.name = String(file.name());
+        info.fullPath = cleanPath + "/" + info.name;
+        info.size = file.size();
+        info.isDirectory = file.isDirectory();
+        info.lastModified = file.getLastWrite();
+        info.created = file.getCreationTime();
+        
+        files.push_back(info);
+        file.close();
+        file = dir.openNextFile();
+    }
+    
+    dir.close();
+    clearError();
+    return files;
+}
+
+std::vector<String> FileSystem::listFilesPattern(const String& directory, const String& pattern) {
+    std::vector<String> matchingFiles;
+    std::vector<String> allFiles = listFiles(directory);
+    
+    // Simple pattern matching (supports * wildcard)
+    for (const String& filename : allFiles) {
+        if (pattern == "*" || filename.indexOf(pattern.substring(1)) >= 0) {
+            matchingFiles.push_back(filename);
+        }
+    }
+    
+    return matchingFiles;
+}
+
+bool FileSystem::formatSD() {
+    // WARNING: This would destroy all data
+    Serial.println("[FileSystem] WARNING: SD format not implemented for safety");
+    return false;
+}
+
+void FileSystem::printDirectoryTree(const String& rootPath, int maxDepth) {
+    Serial.printf("[FileSystem] Directory tree for: %s\n", rootPath.c_str());
+    printDirectoryTreeRecursive(rootPath, 0, maxDepth);
+}
+
+void FileSystem::printDirectoryTreeRecursive(const String& path, int currentDepth, int maxDepth) {
+    if (currentDepth >= maxDepth) return;
+    
+    std::vector<String> files = listFiles(path);
+    for (const String& filename : files) {
+        for (int i = 0; i < currentDepth; i++) Serial.print("  ");
+        Serial.printf("|-- %s\n", filename.c_str());
+        
+        String fullPath = path + "/" + filename;
+        if (directoryExists(fullPath)) {
+            printDirectoryTreeRecursive(fullPath, currentDepth + 1, maxDepth);
+        }
+    }
+}
+
+bool FileSystem::removeDirectory(const String& path) {
+    if (!isReady()) {
+        setError(FS_ERROR_SD_NOT_INITIALIZED, "SD card not ready");
+        return false;
+    }
+    
+    String cleanPath = sanitizePath(path);
+    
+    if (SD.rmdir(cleanPath)) {
+        clearError();
+        return true;
+    } else {
+        setError(FS_ERROR_OPERATION_FAILED, "Failed to remove directory");
+        return false;
+    }
+}
+
+bool FileSystem::isValidFilename(const String& filename) {
+    if (filename.length() == 0 || filename.length() > MAX_FILENAME_LENGTH) {
+        return false;
+    }
+    
+    // Check for invalid characters
+    String invalidChars = "<>:\"|?*";
+    for (int i = 0; i < invalidChars.length(); i++) {
+        if (filename.indexOf(invalidChars[i]) >= 0) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+String FileSystem::getErrorString(FileSystemError error) {
+    switch (error) {
+        case FS_SUCCESS: return "Success";
+        case FS_ERROR_SD_NOT_INITIALIZED: return "SD not initialized";
+        case FS_ERROR_SD_NOT_PRESENT: return "SD not present";
+        case FS_ERROR_FILE_NOT_FOUND: return "File not found";
+        case FS_ERROR_FILE_EXISTS: return "File exists";
+        case FS_ERROR_DIRECTORY_NOT_FOUND: return "Directory not found";
+        case FS_ERROR_DIRECTORY_EXISTS: return "Directory exists";
+        case FS_ERROR_PERMISSION_DENIED: return "Permission denied";
+        case FS_ERROR_DISK_FULL: return "Disk full";
+        case FS_ERROR_INVALID_PATH: return "Invalid path";
+        case FS_ERROR_BUFFER_OVERFLOW: return "Buffer overflow";
+        case FS_ERROR_MEMORY_ERROR: return "Memory error";
+        case FS_ERROR_OPERATION_FAILED: return "Operation failed";
+        case FS_ERROR_INVALID_PARAMETER: return "Invalid parameter";
+        default: return "Unknown error";
+    }
+}

@@ -47,7 +47,7 @@
 // ========================================
 
 // Core system modules - use fixed pin configuration
-#include "core/Config/hardware_pins_fixed.h"
+#include "core/Config/hardware_pins.h"
 #include "core/SystemCore/SystemCore.h"
 #include "core/DisplayManager/DisplayManager.h"
 #include "core/TouchInterface/TouchInterface.h"
@@ -63,6 +63,17 @@
 
 // Memory monitoring
 #include <esp_heap_caps.h>
+
+// ========================================
+// GLOBAL OBJECT DECLARATIONS
+// ========================================
+
+// Core system objects
+SystemCore systemCore;
+DisplayManager displayManager;
+TouchInterface touchInterface;
+AppManager appManager;
+// Note: Settings and FileSystem use singleton pattern
 
 // ========================================
 // GLOBAL VARIABLES
