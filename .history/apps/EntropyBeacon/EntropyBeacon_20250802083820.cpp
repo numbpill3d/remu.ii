@@ -64,27 +64,12 @@ EntropyBeaconApp::~EntropyBeaconApp() {
 bool EntropyBeaconApp::initialize() {
     debugLog("EntropyBeacon initializing...");
     
-    // Create app data directory on SD card
-    String appDir = "/sd/apps/entropybeacon";
-    if (!SD.exists("/sd/apps")) {
-        SD.mkdir("/sd/apps");
-    }
-    SD.mkdir(appDir.c_str());
-    
-    // Initialize recording paths
-    recordingPath = "/sd/apps/entropybeacon/entropy_data.csv";
-    configPath = "/sd/apps/entropybeacon/config.json";
-    logPath = "/sd/apps/entropybeacon/system.log";
-    
     // Initialize DAC
     pinMode(DAC_OUT_PIN, OUTPUT);
     dacWrite(DAC_OUT_PIN, 0);
     
     // Calculate sample interval
     calculateSampleInterval();
-    
-    // Load saved configuration
-    loadConfiguration();
     
     debugLog("EntropyBeacon initialized successfully");
     return true;
@@ -217,34 +202,20 @@ void EntropyBeaconApp::sampleEntropy() {
     bufferIndex = (bufferIndex + 1) % ENTROPY_BUFFER_SIZE;
     
     // Simple anomaly detection
-    bool isAnomaly = detectAnomaly(normalized);
+    detectAnomaly(normalized);
     
     // Update statistics
     updateStatistics(normalized);
-    
-    // Write to SD card if recording
-    if (recordingEnabled) {
-        writeDataToSD(entropyValue, normalized, isAnomaly);
-    }
-    
-    // Log significant events to SD card
-    static uint32_t sampleCount = 0;
-    sampleCount++;
-    if (isAnomaly || sampleCount % 1000 == 0) {
-        logEventToSD(isAnomaly ? "ANOMALY" : "CHECKPOINT", normalized);
-    }
 }
 
-bool EntropyBeaconApp::detectAnomaly(float value) {
+void EntropyBeaconApp::detectAnomaly(float value) {
     float deviation = abs(value - anomalyDetector.mean);
     float stdDev = sqrt(anomalyDetector.variance);
     
-    bool isAnomaly = deviation > (anomalyDetector.threshold * stdDev);
-    if (isAnomaly) {
+    if (deviation > (anomalyDetector.threshold * stdDev)) {
         anomalyDetector.anomalyCount++;
         debugLog("Anomaly detected: " + String(value, 4));
     }
-    return isAnomaly;
 }
 
 void EntropyBeaconApp::updateStatistics(float value) {
@@ -3323,107 +3294,4 @@ void EntropyBeaconApp::resetStatistics() {
     memset(&analysis, 0, sizeof(analysis));
     
     debugLog("Statistics reset");
-}
-
-// ========================================
-// SD CARD STORAGE METHODS
-// ========================================
-
-void EntropyBeaconApp::writeDataToSD(uint16_t value, float normalized, bool isAnomaly) {
-    if (!recordingFile) return;
-    
-    // Write CSV data: timestamp,raw_value,normalized,anomaly
-    recordingFile.print(millis());
-    recordingFile.print(",");
-    recordingFile.print(value);
-    recordingFile.print(",");
-    recordingFile.print(normalized, 6);
-    recordingFile.print(",");
-    recordingFile.println(isAnomaly ? "1" : "0");
-    
-    // Flush every 10 samples for data integrity
-    static uint16_t flushCounter = 0;
-    if (++flushCounter >= 10) {
-        recordingFile.flush();
-        flushCounter = 0;
-    }
-}
-
-void EntropyBeaconApp::logEventToSD(String eventType, float value) {
-    File logFile = SD.open(logPath.c_str(), FILE_APPEND);
-    if (logFile) {
-        logFile.print(millis());
-        logFile.print(" [");
-        logFile.print(eventType);
-        logFile.print("] Value: ");
-        logFile.print(value, 4);
-        logFile.print(" Mean: ");
-        logFile.print(anomalyDetector.mean, 4);
-        logFile.print(" Anomalies: ");
-        logFile.println(anomalyDetector.anomalyCount);
-        logFile.close();
-    }
-}
-
-bool EntropyBeaconApp::startRecording() {
-    if (recordingFile) {
-        recordingFile.close();
-    }
-    
-    // Create unique filename with timestamp
-    String filename = "/sd/apps/entropybeacon/entropy_" + String(millis()) + ".csv";
-    recordingFile = SD.open(filename.c_str(), FILE_WRITE);
-    
-    if (recordingFile) {
-        // Write CSV header
-        recordingFile.println("timestamp,raw_value,normalized,anomaly");
-        debugLog("Recording started: " + filename);
-        return true;
-    }
-    
-    debugLog("Failed to start recording");
-    return false;
-}
-
-void EntropyBeaconApp::stopRecording() {
-    if (recordingFile) {
-        recordingFile.close();
-        debugLog("Recording stopped");
-    }
-}
-
-void EntropyBeaconApp::loadConfiguration() {
-    File configFile = SD.open(configPath.c_str(), FILE_READ);
-    if (configFile) {
-        // Simple configuration loading
-        String config = configFile.readString();
-        configFile.close();
-        
-        // Parse basic settings (simple key=value format)
-        if (config.indexOf("sampleRate=") >= 0) {
-            int start = config.indexOf("sampleRate=") + 11;
-            int end = config.indexOf("\n", start);
-            if (end > start) {
-                int rate = config.substring(start, end).toInt();
-                if (rate >= RATE_100HZ && rate <= RATE_8KHZ) {
-                    viz.sampleRate = (SampleRate)rate;
-                    calculateSampleInterval();
-                }
-            }
-        }
-        
-        debugLog("Configuration loaded from SD card");
-    }
-}
-
-void EntropyBeaconApp::saveConfiguration() {
-    File configFile = SD.open(configPath.c_str(), FILE_WRITE);
-    if (configFile) {
-        configFile.println("# EntropyBeacon Configuration");
-        configFile.println("sampleRate=" + String(viz.sampleRate));
-        configFile.println("threshold=" + String(anomalyDetector.threshold, 2));
-        configFile.println("dacEnabled=" + String(dacEnabled ? "1" : "0"));
-        configFile.close();
-        debugLog("Configuration saved to SD card");
-    }
 }
