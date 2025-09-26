@@ -3,7 +3,8 @@
 // Global instance
 SystemCore systemCore;
 
-SystemCore::SystemCore() : 
+SystemCore::SystemCore() :
+    errorSystem()
     currentState(SYSTEM_BOOT),
     currentPowerState(POWER_GOOD),
     bootTime(0),
@@ -11,14 +12,20 @@ SystemCore::SystemCore() :
     lastPowerCheck(0),
     entropyIndex(0),
     entropyPool(0),
+    entropyBuffer{},
     batteryVoltage(3.7f),
     batteryPercentage(50),
-    isCharging(false)
+    isCharging(false),
+    lastVoltage(0.0f)
 {
     // Initialize entropy buffer with some initial randomness
     for (int i = 0; i < ENTROPY_BUFFER_SIZE; i++) {
         entropyBuffer[i] = 0;
     }
+    
+    // Log system initialization
+    Serial.println("[SystemCore] System initialization starting...");
+    Serial.println("[SystemCore] Free heap at startup: " + String(getFreeHeap()) + " bytes");
 }
 
 SystemCore::~SystemCore() {
@@ -54,14 +61,32 @@ bool SystemCore::initialize() {
     }
     
     // Initial power check
-    updatePower();
+    if (!updatePower()) {
+        Serial.println("[SystemCore] Failed to initialize power monitoring");
+        currentState = SYSTEM_ERROR;
+        return false;
+    }
     
     currentState = SYSTEM_RUNNING;
     Serial.println("[SystemCore] Initialization complete");
     Serial.printf("[SystemCore] Free heap: %d bytes\n", ESP.getFreeHeap());
     Serial.printf("[SystemCore] Initial entropy pool: 0x%08X\n", entropyPool);
     
+    // Verify entropy pool
+    if (entropyPool == 0) {
+        Serial.println("[SystemCore] Warning: Entropy pool not properly initialized");
+        markError(ERROR_ENTROPY);
+    }
+    
     return true;
+}
+
+void SystemCore::logError(ErrorCodes code, const char* message) {
+    errorSystem.logError(code, message);
+}
+
+ErrorCodes SystemCore::getLastError() const {
+    return errorSystem.getLastError();
 }
 
 void SystemCore::update() {

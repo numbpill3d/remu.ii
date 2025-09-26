@@ -2,6 +2,8 @@
 #define SYSTEM_CORE_H
 
 #include <Arduino.h>
+#include "error_codes.h"
+#include "system_error.h"
 #include <esp_task_wdt.h>
 #include <esp_system.h>
 #include "../Config/hardware_pins.h"
@@ -49,6 +51,7 @@ private:
     uint8_t entropyBuffer[ENTROPY_BUFFER_SIZE];
     uint16_t entropyIndex;
     uint32_t entropyPool;
+    SystemError errorSystem;
     
     // Power monitoring
     float batteryVoltage;
@@ -109,6 +112,8 @@ public:
     void enterDeepSleep(uint64_t sleepTimeMs);
     String getSystemInfo() const;
     void dumpSystemStats() const;
+    void logError(ErrorCodes code, const char* message);
+    ErrorCodes getLastError() const;
 };
 
 // Global system core instance
