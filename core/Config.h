@@ -7,6 +7,23 @@
 // ========================================
 
 // ========================================
+// BUILD MODE CONFIGURATION
+// ========================================
+
+// Build Mode Selection
+// Uncomment ONE of these modes:
+//#define WEB_MODE          // Run in web browser (no hardware needed)
+#define HARDWARE_MODE       // Run on physical hardware (TFT, touch, SD card)
+
+// Web Mode Configuration (only used if WEB_MODE is defined)
+#ifdef WEB_MODE
+#define WEB_MODE_SSID "remu.ii"
+#define WEB_MODE_PASSWORD "remuiiweb"
+#define WEB_SERVER_PORT 80
+#define WEBSOCKET_PORT 81
+#endif
+
+// ========================================
 // HARDWARE CONFIGURATION
 // ========================================
 

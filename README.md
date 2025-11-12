@@ -51,7 +51,22 @@ All housed in a portable device with a 2.8" touchscreen, SD card storage, and re
 
 ## 🚀 Quick Start
 
-### For Users
+### 🌐 Web Mode (No Hardware Required!)
+
+**NEW:** Run remu.ii in your web browser with just an ESP32!
+
+Perfect for testing, development, or running without building the full hardware.
+
+1. **Get an ESP32 board** (any variant, $5-15)
+2. **Follow [WEB_MODE_SETUP.md](WEB_MODE_SETUP.md)** for complete instructions
+3. **Connect to WiFi** and open browser to virtual display
+4. **Interact** with remu.ii in a retro Tamagotchi-style interface
+
+**Requirements**: Just ESP32 + USB cable. No display, touchscreen, or SD card needed!
+
+---
+
+### For Users (Full Hardware Build)
 
 1. **Get the hardware** - See [ASSEMBLY_GUIDE.md](ASSEMBLY_GUIDE.md) for build instructions
 2. **Install firmware** - Follow [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for Arduino IDE setup
@@ -68,9 +83,10 @@ All housed in a portable device with a 2.8" touchscreen, SD card storage, and re
 2. **Install Arduino IDE** and ESP32 board support
 
 3. **Install required libraries**:
-   - Adafruit GFX Library (≥1.11.0)
-   - Adafruit ILI9341 (≥1.6.0)
-   - ArduinoJson (v6.x)
+   - Adafruit GFX Library (≥1.11.0) - for hardware mode
+   - Adafruit ILI9341 (≥1.6.0) - for hardware mode
+   - ArduinoJson (v6.x) - required for all modes
+   - WebSockets by Markus Sattler - for web mode only
 
 4. **Open `remu_ii.ino`** in Arduino IDE
 
@@ -89,6 +105,7 @@ See [API_REFERENCE.md](API_REFERENCE.md) for development documentation.
 
 ## 📚 Documentation
 
+- **[WEB_MODE_SETUP.md](WEB_MODE_SETUP.md)** - **NEW!** Run in browser without hardware
 - **[USER_MANUAL.md](USER_MANUAL.md)** - Complete user guide with app instructions
 - **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Firmware installation and setup
 - **[ASSEMBLY_GUIDE.md](ASSEMBLY_GUIDE.md)** - Hardware assembly instructions with wiring diagrams
@@ -150,8 +167,20 @@ Real-time entropy visualization and anomaly detection from floating analog pins.
 
 ## 🛠️ Hardware Requirements
 
-### Main Components
+### Two Options:
 
+#### **Option 1: Web Mode** 🌐 (Easiest!)
+
+Run in your browser - perfect for testing or development:
+- ESP32 board (any variant)
+- USB cable
+- Computer with web browser
+
+**See [WEB_MODE_SETUP.md](WEB_MODE_SETUP.md) for setup**
+
+#### **Option 2: Full Hardware Build** 🔧
+
+Build the complete handheld device:
 - ESP32 WROOM-32 development board
 - 2.8" ILI9341 TFT display with SPI interface
 - 4-wire resistive touchscreen
@@ -167,7 +196,7 @@ Real-time entropy visualization and anomaly detection from floating analog pins.
 - RF modules for extended functionality
 - Custom 3D-printed enclosure
 
-See [ASSEMBLY_GUIDE.md](ASSEMBLY_GUIDE.md) for complete parts list and wiring.
+**See [ASSEMBLY_GUIDE.md](ASSEMBLY_GUIDE.md) for complete parts list and wiring.**
 
 ---
 
