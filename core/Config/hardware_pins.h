@@ -14,10 +14,17 @@
 #define TFT_SCLK   18    // SPI Clock
 #define TFT_MISO   19    // SPI Data In (Master In Slave Out)
 
-// XPT2046 Touch Controller Pins (SPI-based, NOT 4-wire resistive)
+// XPT2046 Touch Controller Pins (SPI-based)
 #define TOUCH_CS   15    // Touch Chip Select - CHANGED from analog pins
 #define TOUCH_IRQ  22    // Touch Interrupt - CHANGED from analog pins
 // Touch shares SPI bus with display (MOSI, MISO, SCLK)
+
+// 4-Wire Resistive Touch Pins (alternative to XPT2046)
+// These are used by the TouchInterface for direct resistive touch reading
+#define TOUCH_XP   32    // X+ (analog input / digital output)
+#define TOUCH_XM   33    // X- (digital output)
+#define TOUCH_YP   27    // Y+ (analog input)
+#define TOUCH_YM   14    // Y- (digital output)
 
 // SD Card Pins (shares SPI bus with display and touch)
 #define SD_CS      4     // SD Card Chip Select - CHANGED from 5
@@ -34,17 +41,18 @@
 // Audio Output - I2S (recommended for best quality)
 #define I2S_BCK_PIN   26    // I2S Bit Clock
 #define I2S_WS_PIN    25    // I2S Word Select (LRCLK)
-#define I2S_DATA_PIN  21    // I2S Data Output - CHANGED from 22
-#define AUDIO_AMP_EN  27    // Audio amplifier enable - CHANGED from 21
+#define I2S_DATA_PIN  21    // I2S Data Output
+// NOTE: AUDIO_AMP_EN removed due to conflict with TOUCH_YP
 
 // Alternative: PWM Audio (backup option)
-#define PWM_OUT_LEFT  32    // Left channel PWM output - CHANGED from 16
-#define PWM_OUT_RIGHT 33    // Right channel PWM output - CHANGED from 17
+// NOTE: PWM audio pins reassigned due to conflict with 4-wire touch
+#define PWM_OUT_LEFT  26    // Left channel PWM output (shared with I2S_BCK)
+#define PWM_OUT_RIGHT 25    // Right channel PWM output (shared with I2S_WS)
 
 // BLE/RF Pins (for external RF modules if needed)
 #define RF_CE_PIN     12    // RF module Chip Enable
-#define RF_CSN_PIN    14    // RF module Chip Select - CHANGED from 27
-#define RF_IRQ_PIN    13    // RF module IRQ - CHANGED from 16
+// NOTE: RF_CSN_PIN removed due to conflict with TOUCH_YM
+#define RF_IRQ_PIN    13    // RF module IRQ
 
 // System Control
 #define BUZZER_PIN    17    // Optional piezo buzzer - CHANGED from 1

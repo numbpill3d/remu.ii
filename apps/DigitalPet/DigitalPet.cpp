@@ -1309,85 +1309,30 @@ void DigitalPetApp::drawASCIIMood(int16_t x, int16_t y, PetMood mood) {
 }
 
 // ========================================
-// TOUCH HANDLING
-// ========================================
-
-void DigitalPetApp::setupTouchZones() {
-    // Feed button
-    touchZones[0] = {10, 180, 60, 20, "feed", true};
-    
-    // Play button
-    touchZones[1] = {75, 180, 60, 20, "play", true};
-    
-    // Sleep button
-    touchZones[2] = {140, 180, 60, 20, "sleep", true};
-    
-    // Stats button
-    touchZones[3] = {205, 180, 60, 20, "stats", true};
-    
-    // Pet area (for petting)
-    touchZones[4] = {120, 80, 80, 80, "pet", true};
-    
-    // Settings area
-    touchZones[5] = {270, 10, 40, 20, "settings", true};
-}
-
-int8_t DigitalPetApp::getTouchedZone(TouchPoint touch) {
-    for (int8_t i = 0; i < 6; i++) {
-        if (touchZones[i].enabled && 
-            touchInterface.isPointInRect(touch, touchZones[i].x, touchZones[i].y, 
-                                       touchZones[i].w, touchZones[i].h)) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-void DigitalPetApp::handleZoneTouch(int8_t zone) {
-    if (zone < 0 || zone >= 6) return;
-    
-    String action = touchZones[zone].action;
-    
-    if (action == "feed") {
-        feedPet();
-    } else if (action == "play") {
-        playWithPet();
-    } else if (action == "sleep") {
-        putPetToSleep();
-    } else if (action == "stats") {
-        showStats = true;
-    } else if (action == "pet") {
-        petPet();
-    } else if (action == "settings") {
-        showCustomization = true;
-    }
-}
-
-// ========================================
 // MISSING BASEAPP METHOD IMPLEMENTATIONS
 // ========================================
 
-bool DigitalPetApp::handleMessage(AppMessage message, void* data) {
+bool DigitalPetApp::handleMessage(AppMessage message) {
     // Handle inter-app messages
     switch (message.type) {
         case MSG_ENTROPY_UPDATE:
             // Could receive entropy data from other apps
-            if (data) {
-                float* entropyValue = (float*)data;
+            if (message.data) {
+                float* entropyValue = (float*)message.data;
                 // Use external entropy data to influence pet
                 if (*entropyValue > 0.8f) {
                     pet.corruptionLevel = min(1.0f, pet.corruptionLevel + 0.005f);
                 }
             }
             return true;
-            
+
         case MSG_BATTERY_LOW:
             // Parasite archetype reacts to low battery
             if (pet.archetype == PARASITE) {
                 recordAction("battery_drain", 2.0f);
             }
             return true;
-            
+
         default:
             return false;
     }
