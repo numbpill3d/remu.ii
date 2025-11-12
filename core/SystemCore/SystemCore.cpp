@@ -4,7 +4,7 @@
 SystemCore systemCore;
 
 SystemCore::SystemCore() :
-    errorSystem()
+    errorSystem(),
     currentState(SYSTEM_BOOT),
     currentPowerState(POWER_GOOD),
     bootTime(0),
@@ -15,8 +15,7 @@ SystemCore::SystemCore() :
     entropyBuffer{},
     batteryVoltage(3.7f),
     batteryPercentage(50),
-    isCharging(false),
-    lastVoltage(0.0f)
+    isCharging(false)
 {
     // Initialize entropy buffer with some initial randomness
     for (int i = 0; i < ENTROPY_BUFFER_SIZE; i++) {
@@ -61,11 +60,7 @@ bool SystemCore::initialize() {
     }
     
     // Initial power check
-    if (!updatePower()) {
-        Serial.println("[SystemCore] Failed to initialize power monitoring");
-        currentState = SYSTEM_ERROR;
-        return false;
-    }
+    updatePower();
     
     currentState = SYSTEM_RUNNING;
     Serial.println("[SystemCore] Initialization complete");
@@ -75,7 +70,7 @@ bool SystemCore::initialize() {
     // Verify entropy pool
     if (entropyPool == 0) {
         Serial.println("[SystemCore] Warning: Entropy pool not properly initialized");
-        markError(ERROR_ENTROPY);
+        logError(ERROR_ENTROPY, "Entropy pool not properly initialized");
     }
     
     return true;

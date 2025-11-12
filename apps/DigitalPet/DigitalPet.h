@@ -201,6 +201,7 @@ private:
     // Animation definitions
     static AnimationFrame idleAnimation[];
     static AnimationFrame happyAnimation[];
+    static AnimationFrame sadAnimation[];
     static AnimationFrame eatingAnimation[];
     static AnimationFrame sleepingAnimation[];
     static AnimationFrame playingAnimation[];
